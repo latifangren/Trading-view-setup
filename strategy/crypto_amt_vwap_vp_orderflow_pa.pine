@@ -1,0 +1,346 @@
+//@version=6
+indicator(
+     "Crypto AMT + VWAP + VP + Orderflow + PA",
+     shorttitle = "Crypto AMT VP Flow PA",
+     overlay = true,
+     max_lines_count = 500,
+     max_boxes_count = 250,
+     max_labels_count = 200,
+     dynamic_requests = true)
+
+//────────────────────────────────────────────────────────────────────
+// Inputs
+//────────────────────────────────────────────────────────────────────
+groupAmt = "1. AMT / Volume Profile"
+vpLookback = input.int(120, "VP lookback bars", minval = 30, maxval = 500, group = groupAmt)
+vpRows = input.int(28, "VP rows", minval = 10, maxval = 60, group = groupAmt)
+valueAreaPct = input.float(70.0, "Value area %", minval = 50.0, maxval = 90.0, step = 1.0, group = groupAmt)
+acceptBars = input.int(2, "Acceptance bars", minval = 1, maxval = 10, group = groupAmt)
+showProfile = input.bool(true, "Show right-side VP boxes", group = groupAmt)
+profileWidthBars = input.int(35, "VP max width bars", minval = 5, maxval = 150, group = groupAmt)
+profileOffsetBars = input.int(3, "VP offset bars", minval = 1, maxval = 50, group = groupAmt)
+
+groupVwap = "2. VWAP"
+vwapAnchorInput = input.string("Daily", "VWAP anchor", options = ["Daily", "Weekly", "Monthly"], group = groupVwap)
+showVwapBands = input.bool(true, "Show VWAP bands", group = groupVwap)
+bandLen = input.int(50, "Band stdev length", minval = 10, maxval = 300, group = groupVwap)
+bandMult = input.float(1.0, "Band multiplier", minval = 0.25, maxval = 5.0, step = 0.25, group = groupVwap)
+
+groupFlow = "3. Orderflow proxy"
+useLtfDelta = input.bool(true, "Use lower timeframe delta", group = groupFlow)
+lowerTf = input.timeframe("1", "Lower timeframe for delta", group = groupFlow)
+deltaLen = input.int(20, "Delta EMA length", minval = 5, maxval = 200, group = groupFlow)
+deltaMult = input.float(1.20, "Strong delta multiplier", minval = 0.50, maxval = 5.00, step = 0.05, group = groupFlow)
+volLen = input.int(20, "Relative volume length", minval = 5, maxval = 200, group = groupFlow)
+volMult = input.float(1.00, "Min relative volume", minval = 0.50, maxval = 5.00, step = 0.05, group = groupFlow)
+cvdResetInput = input.string("Daily", "CVD reset", options = ["None", "Daily", "Weekly"], group = groupFlow)
+
+groupPa = "4. Price action"
+swingLen = input.int(3, "Swing pivot length", minval = 1, maxval = 20, group = groupPa)
+atrLen = input.int(14, "ATR length", minval = 5, maxval = 100, group = groupPa)
+wickAtrMult = input.float(0.35, "Rejection wick ATR multiplier", minval = 0.05, maxval = 2.0, step = 0.05, group = groupPa)
+showStructure = input.bool(true, "Show last swing structure", group = groupPa)
+
+groupSignals = "5. Signals / Display"
+enableSignals = input.bool(true, "Enable signals", group = groupSignals)
+minScore = input.int(3, "Minimum confluence score", minval = 2, maxval = 5, group = groupSignals)
+cooldownBars = input.int(5, "Signal cooldown bars", minval = 0, maxval = 100, group = groupSignals)
+showBarColor = input.bool(true, "Color bars by bias", group = groupSignals)
+showDashboard = input.bool(true, "Show dashboard", group = groupSignals)
+
+//────────────────────────────────────────────────────────────────────
+// Helpers
+//────────────────────────────────────────────────────────────────────
+clearBoxes(array<box> boxes) =>
+    int boxCount = array.size(boxes)
+    if boxCount > 0
+        for n = 0 to boxCount - 1
+            box.delete(array.get(boxes, n))
+        array.clear(boxes)
+
+formatPrice(float value) =>
+    na(value) ? "na" : str.tostring(value, format.mintick)
+
+formatVol(float value) =>
+    na(value) ? "na" : str.tostring(value, format.volume)
+
+//────────────────────────────────────────────────────────────────────
+// VWAP
+//────────────────────────────────────────────────────────────────────
+bool vwapAnchor = switch vwapAnchorInput
+    "Daily" => timeframe.change("D")
+    "Weekly" => timeframe.change("W")
+    => timeframe.change("M")
+
+float vwapValue = ta.vwap(hlc3, vwapAnchor)
+float vwapDev = ta.stdev(hlc3 - vwapValue, bandLen)
+float vwapUpper = vwapValue + vwapDev * bandMult
+float vwapLower = vwapValue - vwapDev * bandMult
+
+plot(vwapValue, "Anchored VWAP", color = color.new(color.orange, 0), linewidth = 2)
+plot(showVwapBands ? vwapUpper : na, "VWAP upper band", color = color.new(color.orange, 70))
+plot(showVwapBands ? vwapLower : na, "VWAP lower band", color = color.new(color.orange, 70))
+
+//────────────────────────────────────────────────────────────────────
+// Rolling Volume Profile: POC / VAH / VAL
+//────────────────────────────────────────────────────────────────────
+var array<float> vpVolumes = array.new<float>()
+if barstate.isfirst or array.size(vpVolumes) != vpRows
+    array.clear(vpVolumes)
+    for r = 0 to vpRows - 1
+        array.push(vpVolumes, 0.0)
+
+for r = 0 to vpRows - 1
+    array.set(vpVolumes, r, 0.0)
+
+float vpHigh = ta.highest(high, vpLookback)
+float vpLow = ta.lowest(low, vpLookback)
+float vpRange = math.max(vpHigh - vpLow, syminfo.mintick)
+float rowHeight = vpRange / vpRows
+
+for i = 0 to vpLookback - 1
+    float barHigh = high[i]
+    float barLow = low[i]
+    float barClose = close[i]
+    float barVol = volume[i]
+    if not na(barHigh) and not na(barLow) and not na(barVol)
+        float barRange = math.max(barHigh - barLow, syminfo.mintick)
+        bool flatBar = math.abs(barHigh - barLow) <= syminfo.mintick
+        for r = 0 to vpRows - 1
+            float rowLow = vpLow + rowHeight * r
+            float rowHigh = rowLow + rowHeight
+            float addVol = 0.0
+            if flatBar
+                bool closeInRow = barClose >= rowLow and (barClose < rowHigh or r == vpRows - 1 and barClose <= rowHigh)
+                addVol := closeInRow ? barVol : 0.0
+            else
+                float overlap = math.max(0.0, math.min(barHigh, rowHigh) - math.max(barLow, rowLow))
+                addVol := barVol * overlap / barRange
+            array.set(vpVolumes, r, array.get(vpVolumes, r) + addVol)
+
+float totalVpVol = 0.0
+float maxRowVol = 0.0
+int pocIndex = 0
+
+for r = 0 to vpRows - 1
+    float rowVol = array.get(vpVolumes, r)
+    totalVpVol += rowVol
+    if rowVol > maxRowVol
+        maxRowVol := rowVol
+        pocIndex := r
+
+int vaLowIndex = pocIndex
+int vaHighIndex = pocIndex
+float vaTarget = totalVpVol * valueAreaPct / 100.0
+float vaAccum = array.get(vpVolumes, pocIndex)
+
+while vaAccum < vaTarget and (vaLowIndex > 0 or vaHighIndex < vpRows - 1)
+    float nextLowVol = vaLowIndex > 0 ? array.get(vpVolumes, vaLowIndex - 1) : -1.0
+    float nextHighVol = vaHighIndex < vpRows - 1 ? array.get(vpVolumes, vaHighIndex + 1) : -1.0
+    if nextHighVol >= nextLowVol
+        vaHighIndex += 1
+        vaAccum += math.max(nextHighVol, 0.0)
+    else
+        vaLowIndex -= 1
+        vaAccum += math.max(nextLowVol, 0.0)
+
+float poc = vpLow + rowHeight * (pocIndex + 0.5)
+float val = vpLow + rowHeight * vaLowIndex
+float vah = vpLow + rowHeight * (vaHighIndex + 1.0)
+
+plot(poc, "VP POC", color = color.new(color.yellow, 0), linewidth = 2)
+plot(vah, "VP VAH", color = color.new(color.teal, 0), linewidth = 1)
+plot(val, "VP VAL", color = color.new(color.teal, 0), linewidth = 1)
+
+// Right-side profile boxes.
+var array<box> profileBoxes = array.new<box>()
+if barstate.islast
+    clearBoxes(profileBoxes)
+    if showProfile and maxRowVol > 0
+        int xStart = bar_index + profileOffsetBars
+        for r = 0 to vpRows - 1
+            float rowLow = vpLow + rowHeight * r
+            float rowHigh = rowLow + rowHeight
+            float rowVol = array.get(vpVolumes, r)
+            int rowWidth = math.max(1, int(math.round(profileWidthBars * rowVol / maxRowVol)))
+            color rowColor = r == pocIndex ? color.new(color.yellow, 35) : r >= vaLowIndex and r <= vaHighIndex ? color.new(color.teal, 76) : color.new(color.gray, 88)
+            box rowBox = box.new(
+                 left = xStart,
+                 top = rowHigh,
+                 right = xStart + rowWidth,
+                 bottom = rowLow,
+                 xloc = xloc.bar_index,
+                 bgcolor = rowColor,
+                 border_color = color.new(rowColor, 100))
+            array.push(profileBoxes, rowBox)
+
+//────────────────────────────────────────────────────────────────────
+// AMT logic: acceptance, rejection, rotation
+//────────────────────────────────────────────────────────────────────
+bool inValue = close >= val and close <= vah
+bool aboveValue = close > vah
+bool belowValue = close < val
+
+bool acceptAbove = ta.lowest(close - vah, acceptBars) > 0
+bool acceptBelow = ta.highest(close - val, acceptBars) < 0
+
+bool valRejection = low <= val and close > val and close > open
+bool vahRejection = high >= vah and close < vah and close < open
+bool pocCrossUp = ta.crossover(close, poc)
+bool pocCrossDown = ta.crossunder(close, poc)
+
+//────────────────────────────────────────────────────────────────────
+// Orderflow proxy: lower-timeframe buy/sell delta estimate + CVD
+//────────────────────────────────────────────────────────────────────
+[ltfOpen, ltfClose, ltfVolume] = request.security_lower_tf(
+     syminfo.tickerid,
+     lowerTf,
+     [open, close, volume],
+     ignore_invalid_timeframe = true)
+
+float barDelta = 0.0
+int intrabarCount = array.size(ltfClose)
+
+if useLtfDelta and intrabarCount > 0
+    for n = 0 to intrabarCount - 1
+        float o = array.get(ltfOpen, n)
+        float c = array.get(ltfClose, n)
+        float v = array.get(ltfVolume, n)
+        barDelta += c > o ? v : c < o ? -v : 0.0
+else
+    barDelta := close > open ? volume : close < open ? -volume : 0.0
+
+bool cvdReset = switch cvdResetInput
+    "Daily" => timeframe.change("D")
+    "Weekly" => timeframe.change("W")
+    => false
+
+var float cvd = 0.0
+cvd := cvdReset ? barDelta : nz(cvd[1]) + barDelta
+
+float deltaAbsAvg = ta.ema(math.abs(barDelta), deltaLen)
+float avgVol = ta.sma(volume, volLen)
+
+bool bullFlow = barDelta > deltaAbsAvg * deltaMult and volume >= avgVol * volMult
+bool bearFlow = barDelta < -deltaAbsAvg * deltaMult and volume >= avgVol * volMult
+
+plot(barDelta, "Bar delta proxy", display = display.data_window)
+plot(cvd, "CVD proxy", display = display.data_window)
+
+//────────────────────────────────────────────────────────────────────
+// Price action: market structure + engulfing + wick rejection
+//────────────────────────────────────────────────────────────────────
+float atr = ta.atr(atrLen)
+float pivotHigh = ta.pivothigh(high, swingLen, swingLen)
+float pivotLow = ta.pivotlow(low, swingLen, swingLen)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+
+if not na(pivotHigh)
+    lastSwingHigh := pivotHigh
+
+if not na(pivotLow)
+    lastSwingLow := pivotLow
+
+bool bosUp = not na(lastSwingHigh) and close > lastSwingHigh and close[1] <= lastSwingHigh
+bool bosDown = not na(lastSwingLow) and close < lastSwingLow and close[1] >= lastSwingLow
+
+bool bullEngulfing = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+bool bearEngulfing = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
+
+float lowerWick = math.min(open, close) - low
+float upperWick = high - math.max(open, close)
+
+bool bullRejection = lowerWick >= atr * wickAtrMult and close > open
+bool bearRejection = upperWick >= atr * wickAtrMult and close < open
+
+plot(showStructure ? lastSwingHigh : na, "Last swing high", color = color.new(color.red, 65), style = plot.style_linebr)
+plot(showStructure ? lastSwingLow : na, "Last swing low", color = color.new(color.lime, 65), style = plot.style_linebr)
+
+//────────────────────────────────────────────────────────────────────
+// Confluence score and signals
+//────────────────────────────────────────────────────────────────────
+int score = 0
+score += close > vwapValue ? 1 : -1
+score += aboveValue ? 1 : belowValue ? -1 : 0
+score += bullFlow ? 1 : bearFlow ? -1 : 0
+score += bosUp or bullEngulfing or bullRejection ? 1 : bosDown or bearEngulfing or bearRejection ? -1 : 0
+score += cvd > cvd[1] ? 1 : cvd < cvd[1] ? -1 : 0
+
+bool longTrigger = acceptAbove or valRejection or pocCrossUp or bosUp or bullEngulfing
+bool shortTrigger = acceptBelow or vahRejection or pocCrossDown or bosDown or bearEngulfing
+
+bool rawLong = enableSignals and score >= minScore and longTrigger
+bool rawShort = enableSignals and score <= -minScore and shortTrigger
+
+var int lastSignalBar = na
+bool cooldownOk = na(lastSignalBar) or bar_index - lastSignalBar > cooldownBars
+
+bool longSignal = rawLong and cooldownOk
+bool shortSignal = rawShort and cooldownOk
+
+if longSignal or shortSignal
+    lastSignalBar := bar_index
+
+plotshape(longSignal, "LONG signal", style = shape.labelup, text = "LONG", location = location.belowbar, color = color.new(color.lime, 0), textcolor = color.white, size = size.small)
+plotshape(shortSignal, "SHORT signal", style = shape.labeldown, text = "SHORT", location = location.abovebar, color = color.new(color.red, 0), textcolor = color.white, size = size.small)
+
+plotshape(valRejection, "VAL rejection", style = shape.triangleup, text = "VAL", location = location.belowbar, color = color.new(color.teal, 0), textcolor = color.white, size = size.tiny)
+plotshape(vahRejection, "VAH rejection", style = shape.triangledown, text = "VAH", location = location.abovebar, color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+plotshape(bullFlow, "Bull flow", style = shape.circle, location = location.belowbar, color = color.new(color.lime, 50), size = size.tiny)
+plotshape(bearFlow, "Bear flow", style = shape.circle, location = location.abovebar, color = color.new(color.red, 50), size = size.tiny)
+
+barcolor(showBarColor ? score >= minScore ? color.new(color.lime, 72) : score <= -minScore ? color.new(color.red, 72) : na : na)
+
+//────────────────────────────────────────────────────────────────────
+// Alerts
+//────────────────────────────────────────────────────────────────────
+alertcondition(longSignal, "Crypto AMT LONG", "Crypto AMT LONG on {{ticker}} {{interval}}")
+alertcondition(shortSignal, "Crypto AMT SHORT", "Crypto AMT SHORT on {{ticker}} {{interval}}")
+alertcondition(valRejection, "VAL bullish rejection", "VAL bullish rejection on {{ticker}} {{interval}}")
+alertcondition(vahRejection, "VAH bearish rejection", "VAH bearish rejection on {{ticker}} {{interval}}")
+alertcondition(bullFlow, "Strong bullish orderflow proxy", "Strong bullish orderflow proxy on {{ticker}} {{interval}}")
+alertcondition(bearFlow, "Strong bearish orderflow proxy", "Strong bearish orderflow proxy on {{ticker}} {{interval}}")
+
+//────────────────────────────────────────────────────────────────────
+// Dashboard
+//────────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 9, border_width = 1)
+
+if barstate.islast and showDashboard
+    string biasText = score >= minScore ? "LONG BIAS" : score <= -minScore ? "SHORT BIAS" : "NEUTRAL"
+    color biasColor = score >= minScore ? color.new(color.lime, 15) : score <= -minScore ? color.new(color.red, 15) : color.new(color.gray, 40)
+    string locationText = aboveValue ? "ABOVE VALUE" : belowValue ? "BELOW VALUE" : inValue ? "IN VALUE" : "NA"
+    string flowText = bullFlow ? "BULL DELTA" : bearFlow ? "BEAR DELTA" : "NORMAL"
+    string paText = bosUp ? "BOS UP" : bosDown ? "BOS DOWN" : bullEngulfing ? "BULL ENGULF" : bearEngulfing ? "BEAR ENGULF" : bullRejection ? "BULL REJECT" : bearRejection ? "BEAR REJECT" : "NONE"
+
+    table.cell(dash, 0, 0, "Crypto AMT Toolkit", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 0, biasText, text_color = color.white, bgcolor = biasColor)
+
+    table.cell(dash, 0, 1, "Score", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 1, str.tostring(score), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 2, "Location", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 2, locationText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 3, "POC", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 3, formatPrice(poc), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 4, "VAH / VAL", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 4, formatPrice(vah) + " / " + formatPrice(val), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 5, "VWAP", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 5, formatPrice(vwapValue), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 6, "Flow", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 6, flowText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 7, "Delta", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 7, formatVol(barDelta), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 8, "PA", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 8, paText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+if barstate.islast and not showDashboard
+    table.clear(dash, 0, 0, 1, 8)
