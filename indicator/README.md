@@ -30,9 +30,21 @@ Versi stabil dan paling direkomendasikan buat dipakai harian.
 
 Pilih v3 kalau kamu mau set yang lebih matang, lebih konsisten, dan tidak butuh eksperimen fitur baru.
 
+### `crypto_amt_toolkit_v6_stable_alert.pine`
+
+Versi stable-alert berbasis v5. Fokusnya menjaga decision layer tetap sama, tapi alert utama lebih aman untuk candle realtime.
+
+- default `Confirm signals on bar close` menyala, jadi Confirmed Long, Confirmed Short, dan Invalidated menunggu candle close
+- sinyal mentah intrabar ditahan sebagai `PENDING LONG` atau `PENDING SHORT` di dashboard sampai candle close
+- Early Warning tetap setup warning awal dan tidak ikut close-confirm, tapi tidak muncul di bar yang sama dengan kandidat raw confirmed long/short
+- default visual lebih ringan: rejection mark off, flow dot off, dan Clean mode on
+- v5 lama tetap file eksperimen terpisah dan tidak diubah
+
+Pilih v6 kalau kamu suka alur v5, tapi ingin alert yang lebih aman dari perubahan sinyal intrabar. Ini cocok untuk alert TradingView yang tidak mau terlalu cepat aktif sebelum candle selesai. Kalau kamu ingin membandingkan behavior mentah tanpa guard close-confirm baru, buka v5 sebagai pembanding eksperimen.
+
 ### `crypto_amt_toolkit_v5_signal_engine.pine`
 
-Versi kandidat eksperimen terbaru. Fokusnya bukan nambah indikator baru, tapi bikin decision layer lebih jelas.
+Versi kandidat eksperimen. Fokusnya bukan nambah indikator baru, tapi bikin decision layer lebih jelas. File ini tetap dipertahankan apa adanya sebagai pembanding untuk v6 stable-alert.
 
 - ada alur Setup -> Trigger -> Confirmed -> Invalidation
 - ada trade mode `Scalp`, `Intraday`, dan `Swing`
@@ -41,7 +53,7 @@ Versi kandidat eksperimen terbaru. Fokusnya bukan nambah indikator baru, tapi bi
 - ada risk helper visual untuk invalidation dan target projection
 - ada Clean mode untuk mengurangi label historis, rejection mark, dan flow dots saat chart terlalu ramai
 
-Pilih v5 kalau kamu mau test engine sinyal yang lebih rapi dan lebih enak diaudit. Statusnya masih kandidat eksperimen, jadi bandingkan dulu lawan v3/v4 sebelum dipakai serius. Panduan lengkap cara bacanya ada di [Panduan Pemula Crypto AMT Toolkit v5](docs/crypto-amt-toolkit-v5-panduan-pemula.md).
+Pilih v5 kalau kamu mau test engine sinyal yang lebih rapi dan lebih enak diaudit tanpa guard stable-alert v6. Statusnya masih kandidat eksperimen, jadi bandingkan dulu lawan v3/v4/v6 sebelum dipakai serius. Panduan lengkap cara bacanya ada di [Panduan Pemula Crypto AMT Toolkit v5](docs/crypto-amt-toolkit-v5-panduan-pemula.md).
 
 ### `crypto_amt_toolkit_v4_safe_ltf.pine`
 
@@ -94,8 +106,9 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 ## Pakai Versi Yang Mana?
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
+- pakai `crypto_amt_toolkit_v6_stable_alert.pine` kalau mau decision layer v5 dengan alert close-confirm yang lebih aman dan visual default lebih ringan
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
-- pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper
+- pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper dalam bentuk eksperimen lama yang tidak diubah
 - pakai `crypto_amt_toolkit_v4_safe_ltf.pine` kalau mau coba improvement LTF, fallback, dan mode performa, tapi siap terima status kandidat eksperimen
 - pakai `crypto_amt_toolkit_v2_beginner_colors.pine` kalau fokus ke visual belajar dan baca level
 - pakai `crypto_amt_vwap_vp_orderflow_pa.pine` kalau butuh baseline reference
@@ -110,6 +123,7 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 4. cek apakah level VP, VWAP, signal, dan dashboard muncul sesuai ekspektasi
 5. khusus v4, cek juga status LTF, fallback, dan mode performanya
 6. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
-7. aktifkan Clean mode kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+7. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
+8. aktifkan atau matikan Clean mode kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.

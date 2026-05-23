@@ -4,6 +4,11 @@ Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
 
 ## Unreleased
 
+- Added `indicator/crypto_amt_toolkit_v6_stable_alert.pine` from v5 as a stable-alert variant with `Confirm signals on bar close` enabled by default.
+- Added gated v6 Confirmed Long, Confirmed Short, and Invalidated alerts so they wait for candle close unless close-confirm is disabled.
+- Added v6 dashboard distinction for realtime raw candidates as `PENDING LONG` / `PENDING SHORT` plus a `Close Confirm` status row.
+- Changed v6 defaults to a lighter chart: rejection marks off, flow dots off, and Clean mode on.
+- Kept `indicator/crypto_amt_toolkit_v5_signal_engine.pine` unchanged as the experimental signal-engine reference.
 - Added `indicator/crypto_amt_toolkit_RECOMMENDED.pine` as the beginner-friendly stable entrypoint copied from v3 Precision.
 - Documented the recommended entrypoint in the root README.
 - Added a clearer educational-use disclaimer in the root README.
