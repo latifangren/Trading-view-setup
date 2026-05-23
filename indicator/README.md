@@ -13,6 +13,12 @@ Folder `strategy/` sudah tidak dipakai untuk flow utama. Posisi script dipindah 
 
 ## Isi File
 
+### `crypto_amt_toolkit_RECOMMENDED.pine`
+
+File paling aman untuk pemula yang ingin langsung mulai tanpa bingung pilih versi.
+
+Saat ini isinya sama dengan `crypto_amt_toolkit_v3_precision.pine`, yaitu versi stabil yang paling direkomendasikan buat pemakaian harian. File ini dibuat sebagai entrypoint supaya pemula tidak otomatis memilih v5 hanya karena nomor versinya paling baru.
+
 ### `crypto_amt_toolkit_v3_precision.pine`
 
 Versi stabil dan paling direkomendasikan buat dipakai harian.
@@ -87,6 +93,7 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 
 ## Pakai Versi Yang Mana?
 
+- pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
 - pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper
 - pakai `crypto_amt_toolkit_v4_safe_ltf.pine` kalau mau coba improvement LTF, fallback, dan mode performa, tapi siap terima status kandidat eksperimen
