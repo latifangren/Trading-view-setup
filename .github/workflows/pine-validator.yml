@@ -1,0 +1,31 @@
+name: Pine Validator
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Pine indicators
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pine-script-validator
+        run: |
+          git clone --depth 1 https://github.com/Poryaei/pine-script-validator.git "$RUNNER_TEMP/pine-script-validator"
+          python -m pip install --upgrade pip
+          python -m pip install -e "$RUNNER_TEMP/pine-script-validator"
+
+      - name: Validate Pine indicators
+        run: pine-validator indicator --agent-json --no-hints --no-information
