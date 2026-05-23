@@ -53,6 +53,8 @@ pine-validator indicator --agent-json --no-hints --no-information
 
 Hasil terakhir: semua file `indicator/*.pine` lolos dengan `0 error` dan `0 warning`.
 
+GitHub Actions juga menjalankan validasi yang sama pada `push` dan `pull_request` lewat `.github/workflows/pine-validator.yml`.
+
 Catatan: validator lokal membantu preflight, tapi bukan compiler resmi TradingView. Compile final tetap harus dicek di TradingView Pine Editor.
 
 ## Batasan Penting
