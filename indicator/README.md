@@ -13,6 +13,19 @@ Folder `strategy/` sudah tidak dipakai untuk flow utama. Posisi script dipindah 
 
 ## Isi File
 
+### `crypto_amt_session_bias_v1.pine`
+
+Indikator session bias yang ringan untuk baca Asia, London, dan New York tanpa Volume Profile, VWAP, atau backtest.
+
+- session detection pakai input Asia, London, New York, dan timezone `Etc/UTC` default
+- kalau sesi overlap, prioritasnya tetap New York > London > Asia
+- track current session open, high, low, mid, dan opening range
+- simpan high/low session sebelumnya untuk deteksi sweep dan reclaim
+- bias mulai netral tiap sesi, lalu berubah bullish setelah reclaim dari low sweep atau bearish setelah reclaim dari high sweep
+- ada marker sweep, marker reclaim/bias, dashboard top-right, background tint ringan, dan alert TradingView
+
+Pilih Session Bias v1 kalau targetmu cuma membaca alur session: apakah harga sweep high/low session sebelumnya lalu reclaim. Ini lebih sederhana daripada toolkit confluence v3/v6, dan cocok dipasang berdampingan dengan indikator lain.
+
 ### `crypto_amt_toolkit_RECOMMENDED.pine`
 
 File paling aman untuk pemula yang ingin langsung mulai tanpa bingung pilih versi.
@@ -106,6 +119,7 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 ## Pakai Versi Yang Mana?
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
+- pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
 - pakai `crypto_amt_toolkit_v6_stable_alert.pine` kalau mau decision layer v5 dengan alert close-confirm yang lebih aman dan visual default lebih ringan
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
 - pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper dalam bentuk eksperimen lama yang tidak diubah
@@ -121,9 +135,11 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 2. compile lalu pastikan script masuk sebagai indikator, bukan strategy
 3. pasang ke chart beberapa timeframe
 4. cek apakah level VP, VWAP, signal, dan dashboard muncul sesuai ekspektasi
-5. khusus v4, cek juga status LTF, fallback, dan mode performanya
-6. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
-7. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
-8. aktifkan atau matikan Clean mode kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+5. khusus Session Bias v1, cek timezone dan jam session, pastikan overlap mengikuti prioritas New York > London > Asia
+6. khusus Session Bias v1, cek current high/low/mid/open, opening range, previous high/low, marker Sweep High/Sweep Low, reclaim, bias, dashboard, dan alertcondition muncul sesuai ekspektasi
+7. khusus v4, cek juga status LTF, fallback, dan mode performanya
+8. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
+9. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
+10. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.

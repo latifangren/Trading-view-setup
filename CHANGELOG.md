@@ -4,6 +4,9 @@ Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
 
 ## Unreleased
 
+- Added `indicator/crypto_amt_session_bias_v1.pine` as a new Pine v6 overlay indicator for Asia/London/New York session bias.
+- Added Session Bias v1 sweep, reclaim, bias flip markers, top-right dashboard, and TradingView alerts.
+- Documented Session Bias v1 chooser guidance and manual validation checklist in the root and indicator READMEs.
 - Added GitHub Actions CI to run Pine validator on `indicator/*.pine` for `push` and `pull_request`.
 - Added `indicator/crypto_amt_toolkit_v6_stable_alert.pine` from v5 as a stable-alert variant with `Confirm signals on bar close` enabled by default.
 - Added gated v6 Confirmed Long, Confirmed Short, and Invalidated alerts so they wait for candle close unless close-confirm is disabled.

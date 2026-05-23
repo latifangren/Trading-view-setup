@@ -9,6 +9,7 @@ Semua script di repo ini adalah `indicator(...)`, bukan `strategy(...)`. Artinya
 ```text
 indicator/
   README.md
+  crypto_amt_session_bias_v1.pine
   crypto_amt_toolkit_RECOMMENDED.pine
   crypto_amt_toolkit_v6_stable_alert.pine
   crypto_amt_toolkit_v5_signal_engine.pine
@@ -23,6 +24,7 @@ Folder `indicator/` adalah lokasi utama script Pine. Folder `strategy/` sudah ti
 ## Pilih File Yang Mana?
 
 - `indicator/crypto_amt_toolkit_RECOMMENDED.pine` adalah file paling aman untuk pemula. Saat ini isinya sama dengan v3 Precision yang stabil/recommended.
+- `indicator/crypto_amt_session_bias_v1.pine` adalah indikator session bias yang lebih ringan untuk baca Asia, London, dan New York: sweep high/low session sebelumnya, reclaim, bias bullish/bearish, dashboard, dan alert.
 - `indicator/crypto_amt_toolkit_v6_stable_alert.pine` adalah v6 stable-alert berbasis v5 dengan alert Confirmed/Invalidated yang default-nya menunggu candle close, status dashboard `PENDING LONG` / `PENDING SHORT`, dan default visual yang lebih ringan.
 - `indicator/crypto_amt_toolkit_v3_precision.pine` adalah versi stabil yang paling direkomendasikan untuk pemakaian harian.
 - `indicator/crypto_amt_toolkit_v5_signal_engine.pine` adalah kandidat eksperimen yang tetap tidak diubah, dengan decision layer Setup, Trigger, Confirmed, Invalidation, alert terpisah, dan risk helper visual.
@@ -35,13 +37,14 @@ Detail tiap file ada di [indicator/README.md](indicator/README.md). Untuk belaja
 ## Cara Pakai
 
 1. Untuk mulai paling aman, buka `indicator/crypto_amt_toolkit_RECOMMENDED.pine`.
-2. Kalau ingin memilih versi manual, buka file `.pine` lain yang ingin dipakai.
-3. Copy isi file ke TradingView Pine Editor.
-4. Compile script di TradingView.
-5. Add to chart sebagai indikator.
-6. Cek hasilnya di beberapa timeframe sebelum dipakai serius.
+2. Kalau fokusnya session bias ICT/AMT yang ringan tanpa Volume Profile, buka `indicator/crypto_amt_session_bias_v1.pine`.
+3. Kalau ingin memilih versi manual, buka file `.pine` lain yang ingin dipakai.
+4. Copy isi file ke TradingView Pine Editor.
+5. Compile script di TradingView.
+6. Add to chart sebagai indikator.
+7. Cek hasilnya di beberapa timeframe sebelum dipakai serius.
 
-Untuk pemakaian normal, mulai dari v3. Kalau ingin coba guard lower timeframe dan mode performa yang lebih aman, bandingkan v3 dengan v4. Kalau ingin decision layer v5 tapi alert lebih aman untuk realtime, pakai v6 stable-alert. Di v6, sinyal mentah intrabar akan tampil sebagai `PENDING LONG` atau `PENDING SHORT` sampai candle close; alert Confirmed Long, Confirmed Short, dan Invalidated baru aktif setelah close saat `Confirm signals on bar close` menyala. Early Warning tetap setup warning awal, bukan alert close-confirm.
+Untuk pemakaian normal confluence, mulai dari v3 atau RECOMMENDED. Kalau ingin fokus khusus ke session sweep dan reclaim, pakai Session Bias v1. Kalau ingin coba guard lower timeframe dan mode performa yang lebih aman, bandingkan v3 dengan v4. Kalau ingin decision layer v5 tapi alert lebih aman untuk realtime, pakai v6 stable-alert. Di v6, sinyal mentah intrabar akan tampil sebagai `PENDING LONG` atau `PENDING SHORT` sampai candle close; alert Confirmed Long, Confirmed Short, dan Invalidated baru aktif setelah close saat `Confirm signals on bar close` menyala. Early Warning tetap setup warning awal, bukan alert close-confirm.
 
 ## Validasi Lokal
 
@@ -68,6 +71,7 @@ Custom Volume Profile, POC, VAH, VAL, dan VWAP bands juga merupakan pendekatan b
 ## Status Versi
 
 - RECOMMENDED: alias stabil untuk pemula, saat ini copy dari v3
+- Session Bias v1: indikator ringan untuk sesi Asia/London/New York, sweep, reclaim, dan bias intraday
 - v6: stable-alert berbasis v5, dengan close-confirm alert default dan tampilan lebih ringan
 - v3: stable/recommended
 - v5: signal-engine candidate/experimental, tetap ada dan tidak diubah
