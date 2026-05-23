@@ -23,5 +23,3 @@ build/
 *.log
 *.tmp
 *.temp
-.png
-/indicator/docs/image
