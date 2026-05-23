@@ -1,1 +1,25 @@
-/.omo
+# OhMyOpenCode local state
+/.omo/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python local tooling
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# JavaScript local tooling
+node_modules/
+dist/
+build/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
