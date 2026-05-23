@@ -55,6 +55,19 @@ Versi stable-alert berbasis v5. Fokusnya menjaga decision layer tetap sama, tapi
 
 Pilih v6 kalau kamu suka alur v5, tapi ingin alert yang lebih aman dari perubahan sinyal intrabar. Ini cocok untuk alert TradingView yang tidak mau terlalu cepat aktif sebelum candle selesai. Kalau kamu ingin membandingkan behavior mentah tanpa guard close-confirm baru, buka v5 sebagai pembanding eksperimen.
 
+### `crypto_amt_toolkit_v7_clean_execution.pine`
+
+Versi clean-execution berbasis v6 stable-alert. Fokusnya bukan mengubah decision layer utama, tapi merapikan default chart dan dashboard supaya keputusan akhir lebih cepat terbaca.
+
+- default `Confirm signals on bar close` tetap menyala, jadi behavior close-confirm tetap sama seperti v6
+- dashboard tetap on, dan `Dashboard detail` default-nya `Focus`
+- mode `Focus` menaruh baris `FINAL` dan `WHY` di bagian paling atas sebelum detail `Close Confirm`, score, context, active, flow, dan raw trigger
+- mode `Full` membuka lagi detail debug seperti score parts, setup, block reason, risk, target, LTF delta, delta/relvol, PA, dan mode
+- default visual dibuat lebih ringan: VP boxes, VWAP bands, EMA trend filter, setup or confirmed labels, risk helper, bar color, level tags, rejection marks, dan flow dots default off
+- Clean mode tetap on supaya chart historis tidak cepat penuh, tapi user masih bisa menyalakan toggle visual satu per satu kalau butuh audit lebih detail
+
+Pilih v7 kalau kamu suka alur close-confirm v6, tapi ingin tampilan yang lebih bersih dan dashboard yang langsung menekankan keputusan akhir serta alasan di baliknya. Ini cocok buat pemakaian harian saat kamu lebih sering butuh ringkasan eksekusi daripada panel debug penuh.
+
 ### `crypto_amt_toolkit_v5_signal_engine.pine`
 
 Versi kandidat eksperimen. Fokusnya bukan nambah indikator baru, tapi bikin decision layer lebih jelas. File ini tetap dipertahankan apa adanya sebagai pembanding untuk v6 stable-alert.
@@ -120,6 +133,7 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
+- pakai `crypto_amt_toolkit_v7_clean_execution.pine` kalau kamu mau behavior close-confirm ala v6, tapi dengan default chart lebih bersih dan dashboard `Focus` yang menaruh `FINAL` dan `WHY` paling atas
 - pakai `crypto_amt_toolkit_v6_stable_alert.pine` kalau mau decision layer v5 dengan alert close-confirm yang lebih aman dan visual default lebih ringan
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
 - pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper dalam bentuk eksperimen lama yang tidak diubah
@@ -140,6 +154,7 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 7. khusus v4, cek juga status LTF, fallback, dan mode performanya
 8. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
 9. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
-10. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+10. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
+11. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.
