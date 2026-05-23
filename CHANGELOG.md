@@ -1,0 +1,40 @@
+# Changelog
+
+Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
+
+## Unreleased
+
+- Added `indicator/crypto_amt_toolkit_RECOMMENDED.pine` as the beginner-friendly stable entrypoint copied from v3 Precision.
+- Documented the recommended entrypoint in the root README.
+- Added a clearer educational-use disclaimer in the root README.
+
+## v5 - Signal Engine
+
+- Added Setup -> Trigger -> Confirmed -> Invalidated decision flow.
+- Added trade modes: Scalp, Intraday, and Swing.
+- Added separated alerts for Early Warning, Confirmed Long, Confirmed Short, and Invalidated.
+- Added active side, block reason, and risk/target helper visuals.
+- Added Clean mode to reduce chart clutter.
+
+## v4 - Safe LTF
+
+- Added lower timeframe status and fallback handling.
+- Added performance mode for safer lower-timeframe usage.
+- Improved dashboard visibility for LTF delta state.
+
+## v3 - Precision
+
+- Added stricter confluence scoring.
+- Added EMA trend filter and HTF bias.
+- Added no-trade filtering for middle value area.
+- Added clearer dashboard fields for bias, location, trend, flow, and price action.
+
+## v2 - Beginner Colors
+
+- Improved beginner-friendly colors for POC, VAH, VAL, VWAP, and signals.
+- Added right-side labels for important levels.
+- Added clearer visual markers for reading chart context.
+
+## Baseline
+
+- Initial AMT, VWAP, Volume Profile, orderflow proxy, and price action confluence indicator.
