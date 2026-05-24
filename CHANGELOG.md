@@ -4,6 +4,10 @@ Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
 
 ## Unreleased
 
+- Added `indicator/crypto_amt_toolkit_v6_1_conservative_risk.pine` as a conservative-risk experiment based on v6 stable-alert.
+- Added `indicator/crypto_amt_toolkit_v7_1_conservative_clean.pine` as a clean-dashboard conservative experiment based on v7 clean-execution.
+- Added stricter scalp relative-volume gating, key-level-aware low-relvol blocking, limited close-confirm impulse exception for away-from-level guards, and `Risk mode` Structure/Hybrid/Tight in v6.1/v7.1.
+- Kept existing v6 and v7 files unchanged so the stable-alert and clean-execution baselines remain comparable.
 - Added `indicator/crypto_amt_session_bias_v1.pine` as a new Pine v6 overlay indicator for Asia/London/New York session bias.
 - Added Session Bias v1 sweep, reclaim, bias flip markers, top-right dashboard, and TradingView alerts.
 - Documented Session Bias v1 chooser guidance and manual validation checklist in the root and indicator READMEs.

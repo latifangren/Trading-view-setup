@@ -11,7 +11,9 @@ indicator/
   README.md
   crypto_amt_session_bias_v1.pine
   crypto_amt_toolkit_RECOMMENDED.pine
+  crypto_amt_toolkit_v7_1_conservative_clean.pine
   crypto_amt_toolkit_v7_clean_execution.pine
+  crypto_amt_toolkit_v6_1_conservative_risk.pine
   crypto_amt_toolkit_v6_stable_alert.pine
   crypto_amt_toolkit_v5_signal_engine.pine
   crypto_amt_toolkit_v4_safe_ltf.pine
@@ -26,7 +28,9 @@ Folder `indicator/` adalah lokasi utama script Pine. Folder `strategy/` sudah ti
 
 - `indicator/crypto_amt_toolkit_RECOMMENDED.pine` adalah file paling aman untuk pemula. Saat ini isinya sama dengan v3 Precision yang stabil/recommended.
 - `indicator/crypto_amt_session_bias_v1.pine` adalah indikator session bias yang lebih ringan untuk baca Asia, London, dan New York: sweep high/low session sebelumnya, reclaim, bias bullish/bearish, dashboard, dan alert.
+- `indicator/crypto_amt_toolkit_v7_1_conservative_clean.pine` adalah v7.1 conservative-clean: logic eksperimen v6.1 dengan default visual dan dashboard Focus/Full ala v7 untuk dicoba tanpa mengubah v7 lama.
 - `indicator/crypto_amt_toolkit_v7_clean_execution.pine` adalah v7 clean-execution berbasis v6 stable-alert. Alert close-confirm tetap dipertahankan, default visual dibuat lebih bersih, dan dashboard Focus menaruh `FINAL` serta `WHY` di atas detail raw trigger dan debug.
+- `indicator/crypto_amt_toolkit_v6_1_conservative_risk.pine` adalah v6.1 conservative-risk berbasis v6 stable-alert. Ini file eksperimen untuk scalp relative volume lebih ketat, no-trade low-volume yang tetap menghormati key level, dan `Risk mode` Structure/Hybrid/Tight.
 - `indicator/crypto_amt_toolkit_v6_stable_alert.pine` adalah v6 stable-alert berbasis v5 dengan alert Confirmed/Invalidated yang default-nya menunggu candle close, status dashboard `PENDING LONG` / `PENDING SHORT`, dan default visual yang lebih ringan.
 - `indicator/crypto_amt_toolkit_v3_precision.pine` adalah versi stabil yang paling direkomendasikan untuk pemakaian harian.
 - `indicator/crypto_amt_toolkit_v5_signal_engine.pine` adalah kandidat eksperimen yang tetap tidak diubah, dengan decision layer Setup, Trigger, Confirmed, Invalidation, alert terpisah, dan risk helper visual.
@@ -46,7 +50,7 @@ Detail tiap file ada di [indicator/README.md](indicator/README.md). Untuk belaja
 6. Add to chart sebagai indikator.
 7. Cek hasilnya di beberapa timeframe sebelum dipakai serius.
 
-Untuk pemakaian normal confluence, mulai dari v3 atau RECOMMENDED. Kalau ingin fokus khusus ke session sweep dan reclaim, pakai Session Bias v1. Kalau ingin coba guard lower timeframe dan mode performa yang lebih aman, bandingkan v3 dengan v4. Kalau ingin decision layer v5 tapi alert lebih aman untuk realtime, pakai v6 stable-alert. Kalau ingin alur eksekusi yang sama tapi tampilan default lebih bersih dan dashboard lebih fokus ke keputusan akhir, pakai v7 clean-execution. Di v6 dan v7, sinyal mentah intrabar akan tampil sebagai `PENDING LONG` atau `PENDING SHORT` sampai candle close; alert Confirmed Long, Confirmed Short, dan Invalidated baru aktif setelah close saat `Confirm signals on bar close` menyala. Early Warning tetap setup warning awal, bukan alert close-confirm.
+Untuk pemakaian normal confluence, mulai dari v3 atau RECOMMENDED. Kalau ingin fokus khusus ke session sweep dan reclaim, pakai Session Bias v1. Kalau ingin coba guard lower timeframe dan mode performa yang lebih aman, bandingkan v3 dengan v4. Kalau ingin decision layer v5 tapi alert lebih aman untuk realtime, pakai v6 stable-alert. Kalau ingin alur eksekusi yang sama tapi tampilan default lebih bersih dan dashboard lebih fokus ke keputusan akhir, pakai v7 clean-execution. Kalau mau mengetes filter volume/risk yang lebih konservatif tanpa mengubah versi lama, pakai v6.1 conservative-risk atau v7.1 conservative-clean. Di keluarga v6/v6.1/v7/v7.1, sinyal mentah intrabar akan tampil sebagai `PENDING LONG` atau `PENDING SHORT` sampai candle close; alert Confirmed Long, Confirmed Short, dan Invalidated baru aktif setelah close saat `Confirm signals on bar close` menyala. Early Warning tetap setup warning awal, bukan alert close-confirm.
 
 ## Validasi Lokal
 
@@ -74,7 +78,9 @@ Custom Volume Profile, POC, VAH, VAL, dan VWAP bands juga merupakan pendekatan b
 
 - RECOMMENDED: alias stabil untuk pemula, saat ini copy dari v3
 - Session Bias v1: indikator ringan untuk sesi Asia/London/New York, sweep, reclaim, dan bias intraday
+- v7.1: conservative-clean experiment, logic v6.1 dengan default visual dan dashboard Focus/Full ala v7
 - v7: clean-execution berbasis v6 stable-alert, close-confirm tetap on, visual default lebih bersih, dashboard Focus menaruh `FINAL` dan `WHY` paling atas
+- v6.1: conservative-risk experiment berbasis v6, dengan scalp relative volume lebih ketat dan Risk mode Structure/Hybrid/Tight
 - v6: stable-alert berbasis v5, dengan close-confirm alert default dan tampilan lebih ringan
 - v3: stable/recommended
 - v5: signal-engine candidate/experimental, tetap ada dan tidak diubah

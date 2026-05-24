@@ -55,6 +55,18 @@ Versi stable-alert berbasis v5. Fokusnya menjaga decision layer tetap sama, tapi
 
 Pilih v6 kalau kamu suka alur v5, tapi ingin alert yang lebih aman dari perubahan sinyal intrabar. Ini cocok untuk alert TradingView yang tidak mau terlalu cepat aktif sebelum candle selesai. Kalau kamu ingin membandingkan behavior mentah tanpa guard close-confirm baru, buka v5 sebagai pembanding eksperimen.
 
+### `crypto_amt_toolkit_v6_1_conservative_risk.pine`
+
+Versi eksperimen berbasis v6 stable-alert. Fokusnya mengetes filter sinyal dan risk helper yang lebih konservatif tanpa mengubah v6 lama.
+
+- close-confirm, `PENDING LONG` / `PENDING SHORT`, dan empat alert utama tetap mengikuti v6
+- `Scalp` memakai relative volume minimum yang lebih ketat sebelum raw confirmed signal lolos
+- low-relvol block dibuat lebih ketat untuk scalp, tapi tetap tidak memblok hanya karena volume rendah saat harga dekat VAH, VAL, POC, atau VWAP
+- `AWAY FROM LEVEL` tetap jadi guard utama; impulse hanya bisa mendapat pengecualian kalau candle sudah close, satu arah, volume cukup, score lebih kuat dari syarat minimum, HTF valid, dan tidak sedang middle value / low relvol / chop
+- `Risk mode` default `Structure`, sehingga formula invalidation lama tetap dipakai; `Hybrid` dan `Tight` disediakan untuk mengetes invalidation/target helper yang lebih dekat ke harga
+
+Pilih v6.1 kalau kamu ingin mengetes apakah setup 5m/15m jadi lebih tahan terhadap volume kering dan whipsaw tanpa kehilangan behavior alert aman dari v6.
+
 ### `crypto_amt_toolkit_v7_clean_execution.pine`
 
 Versi clean-execution berbasis v6 stable-alert. Fokusnya bukan mengubah decision layer utama, tapi merapikan default chart dan dashboard supaya keputusan akhir lebih cepat terbaca.
@@ -67,6 +79,17 @@ Versi clean-execution berbasis v6 stable-alert. Fokusnya bukan mengubah decision
 - Clean mode tetap on supaya chart historis tidak cepat penuh, tapi user masih bisa menyalakan toggle visual satu per satu kalau butuh audit lebih detail
 
 Pilih v7 kalau kamu suka alur close-confirm v6, tapi ingin tampilan yang lebih bersih dan dashboard yang langsung menekankan keputusan akhir serta alasan di baliknya. Ini cocok buat pemakaian harian saat kamu lebih sering butuh ringkasan eksekusi daripada panel debug penuh.
+
+### `crypto_amt_toolkit_v7_1_conservative_clean.pine`
+
+Versi eksperimen yang menggabungkan logic conservative-risk v6.1 dengan tampilan bersih v7.
+
+- close-confirm, pending state, dan alert shape tetap sama seperti v6/v7
+- logic volume, low-relvol, away-from-level exception, dan `Risk mode` mengikuti v6.1
+- default chart tetap bersih seperti v7: VP boxes, VWAP bands, EMA, labels, risk helper, bar color, level tags, rejection marks, dan flow dots default off
+- dashboard `Focus` tetap menaruh `FINAL` dan `WHY` di atas, sedangkan `Full` membuka detail debug termasuk mode dan risk mode
+
+Pilih v7.1 kalau kamu ingin langsung mencoba versi conservative-risk dengan dashboard yang paling enak dibaca saat memantau chart.
 
 ### `crypto_amt_toolkit_v5_signal_engine.pine`
 
@@ -133,7 +156,9 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
+- pakai `crypto_amt_toolkit_v7_1_conservative_clean.pine` kalau kamu mau eksperimen conservative-risk dengan tampilan clean dan dashboard Focus/Full ala v7
 - pakai `crypto_amt_toolkit_v7_clean_execution.pine` kalau kamu mau behavior close-confirm ala v6, tapi dengan default chart lebih bersih dan dashboard `Focus` yang menaruh `FINAL` dan `WHY` paling atas
+- pakai `crypto_amt_toolkit_v6_1_conservative_risk.pine` kalau kamu mau eksperimen filter volume/risk yang lebih konservatif tanpa mengubah v6 lama
 - pakai `crypto_amt_toolkit_v6_stable_alert.pine` kalau mau decision layer v5 dengan alert close-confirm yang lebih aman dan visual default lebih ringan
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
 - pakai `crypto_amt_toolkit_v5_signal_engine.pine` kalau mau test decision layer Setup, Trigger, Confirmed, Invalidation, plus risk helper dalam bentuk eksperimen lama yang tidak diubah
@@ -155,6 +180,8 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 8. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
 9. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
 10. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
-11. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+11. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
+12. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
+13. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.
