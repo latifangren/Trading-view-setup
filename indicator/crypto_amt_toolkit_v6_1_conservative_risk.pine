@@ -1,0 +1,716 @@
+//@version=6
+indicator(
+     "Crypto AMT Toolkit v6.1 - Conservative Risk",
+     shorttitle = "Crypto AMT v6.1 Risk",
+     overlay = true,
+     max_lines_count = 500,
+     max_boxes_count = 250,
+     max_labels_count = 300,
+     dynamic_requests = true)
+
+//────────────────────────────────────────────────────────────────────
+// Inputs
+//────────────────────────────────────────────────────────────────────
+groupAmt = "1. AMT / Volume Profile"
+vpLookback = input.int(160, "VP lookback bars", minval = 30, maxval = 500, group = groupAmt)
+vpRows = input.int(36, "VP rows", minval = 10, maxval = 70, group = groupAmt)
+valueAreaPct = input.float(70.0, "Value area %", minval = 50.0, maxval = 90.0, step = 1.0, group = groupAmt)
+acceptBars = input.int(2, "Acceptance bars", minval = 1, maxval = 10, group = groupAmt)
+levelToleranceAtr = input.float(0.35, "Level touch tolerance ATR", minval = 0.05, maxval = 2.0, step = 0.05, group = groupAmt)
+showProfile = input.bool(true, "Show right-side VP boxes", group = groupAmt)
+profileWidthBars = input.int(35, "VP max width bars", minval = 5, maxval = 150, group = groupAmt)
+profileOffsetBars = input.int(3, "VP offset bars", minval = 1, maxval = 50, group = groupAmt)
+perfMode = input.string("Balanced", "Performance mode", options = ["Balanced", "Fast", "Full"], group = groupAmt)
+
+bool perfFast = perfMode == "Fast"
+bool perfFull = perfMode == "Full"
+int effectiveVpLookback = perfFull ? vpLookback : perfFast ? math.min(vpLookback, 100) : math.min(vpLookback, 200)
+int effectiveVpRows = perfFull ? vpRows : perfFast ? math.min(vpRows, 24) : math.min(vpRows, 40)
+int effectiveProfileWidthBars = perfFull ? profileWidthBars : perfFast ? math.min(profileWidthBars, 24) : math.min(profileWidthBars, 45)
+
+groupVwap = "2. VWAP"
+vwapAnchorInput = input.string("Daily", "VWAP anchor", options = ["Daily", "Weekly", "Monthly"], group = groupVwap)
+showVwapBands = input.bool(true, "Show VWAP bands", group = groupVwap)
+bandLen = input.int(50, "Band stdev length", minval = 10, maxval = 300, group = groupVwap)
+bandMult = input.float(1.0, "Band multiplier", minval = 0.25, maxval = 5.0, step = 0.25, group = groupVwap)
+
+groupTrend = "3. Trend Filter"
+showEMAs = input.bool(true, "Show EMA trend filter", group = groupTrend)
+emaFastLen = input.int(50, "Fast EMA", minval = 5, maxval = 300, group = groupTrend)
+emaSlowLen = input.int(200, "Slow EMA", minval = 20, maxval = 500, group = groupTrend)
+useHtfFilter = input.bool(true, "Use HTF bias filter", group = groupTrend)
+htfTf = input.timeframe("240", "HTF bias timeframe", group = groupTrend)
+htfEmaLen = input.int(50, "HTF EMA length", minval = 10, maxval = 300, group = groupTrend)
+
+groupFlow = "4. Orderflow proxy"
+useLtfDelta = input.bool(true, "Use lower timeframe delta", group = groupFlow)
+lowerTf = input.timeframe("1", "Lower timeframe for delta", group = groupFlow)
+deltaLen = input.int(20, "Delta EMA length", minval = 5, maxval = 200, group = groupFlow)
+deltaMult = input.float(1.35, "Strong delta multiplier", minval = 0.50, maxval = 5.00, step = 0.05, group = groupFlow)
+volLen = input.int(20, "Relative volume length", minval = 5, maxval = 200, group = groupFlow)
+volMult = input.float(1.10, "Min relative volume", minval = 0.50, maxval = 5.00, step = 0.05, group = groupFlow)
+cvdResetInput = input.string("Daily", "CVD reset", options = ["None", "Daily", "Weekly"], group = groupFlow)
+
+groupPa = "5. Price action"
+swingLen = input.int(3, "Swing pivot length", minval = 1, maxval = 20, group = groupPa)
+atrLen = input.int(14, "ATR length", minval = 5, maxval = 100, group = groupPa)
+wickAtrMult = input.float(0.40, "Rejection wick ATR multiplier", minval = 0.05, maxval = 2.0, step = 0.05, group = groupPa)
+bodyAtrMult = input.float(0.25, "Impulse body ATR multiplier", minval = 0.05, maxval = 2.0, step = 0.05, group = groupPa)
+showStructure = input.bool(false, "Show last swing structure", group = groupPa)
+
+groupSignals = "6. Signal Engine"
+enableSignals = input.bool(true, "Enable signal engine", group = groupSignals)
+tradeMode = input.string("Intraday", "Trade mode", options = ["Scalp", "Intraday", "Swing"], group = groupSignals)
+minScoreInput = input.int(5, "Minimum confluence score", minval = 3, maxval = 9, group = groupSignals)
+cooldownBars = input.int(8, "Base signal cooldown bars", minval = 0, maxval = 100, group = groupSignals)
+confirmOnClose = input.bool(true, "Confirm signals on bar close", group = groupSignals)
+noTradeFilter = input.string("Adaptive", "No-trade filter", options = ["Adaptive", "Middle Value", "Off"], group = groupSignals)
+blockMiddleValue = input.bool(true, "Block middle value area", group = groupSignals)
+requireLevelTouch = input.bool(true, "Require VAH/VAL/POC/VWAP area", group = groupSignals)
+showSignalLabels = input.bool(true, "Show setup / confirmed labels", group = groupSignals)
+showRiskHelper = input.bool(true, "Show invalidation / target helper", group = groupSignals)
+riskProjectionBars = input.int(30, "Risk helper projection bars", minval = 5, maxval = 120, group = groupSignals)
+target1R = input.float(1.0, "Target 1 R multiple", minval = 0.25, maxval = 5.0, step = 0.25, group = groupSignals)
+target2R = input.float(2.0, "Target 2 R multiple", minval = 0.50, maxval = 8.0, step = 0.25, group = groupSignals)
+riskMode = input.string("Structure", "Risk mode", options = ["Structure", "Hybrid", "Tight"], group = groupSignals)
+
+groupDisplay = "7. Display"
+showBarColor = input.bool(true, "Color bars by bias", group = groupDisplay)
+showDashboard = input.bool(true, "Show dashboard", group = groupDisplay)
+showLevelTags = input.bool(true, "Show beginner level tags on the right", group = groupDisplay)
+showRejectionMarks = input.bool(false, "Show VAH / VAL rejection markers", group = groupDisplay)
+showFlowDots = input.bool(false, "Show orderflow dots", group = groupDisplay)
+cleanMode = input.bool(true, "Clean mode (reduce chart clutter)", group = groupDisplay)
+
+//────────────────────────────────────────────────────────────────────
+// Helpers
+//────────────────────────────────────────────────────────────────────
+clearBoxes(array<box> boxes) =>
+    int boxCount = array.size(boxes)
+    if boxCount > 0
+        for n = 0 to boxCount - 1
+            box.delete(array.get(boxes, n))
+        array.clear(boxes)
+
+formatPrice(float value) =>
+    na(value) ? "na" : str.tostring(value, format.mintick)
+
+formatVol(float value) =>
+    na(value) ? "na" : str.tostring(value, format.volume)
+
+nearLevel(float price, float level, float tolerance) =>
+    not na(level) and math.abs(price - level) <= tolerance
+
+//────────────────────────────────────────────────────────────────────
+// Beginner-friendly color palette
+//────────────────────────────────────────────────────────────────────
+// POC = yellow, VAH = green, VAL = red, VWAP = blue.
+// EMA fast = white, EMA slow = purple.
+color colPOC = color.rgb(255, 214, 0)
+color colVAH = color.rgb(0, 200, 83)
+color colVAL = color.rgb(255, 82, 82)
+color colVWAP = color.rgb(41, 121, 255)
+color colBull = color.rgb(0, 200, 83)
+color colBear = color.rgb(255, 82, 82)
+color colNeutral = color.rgb(120, 130, 145)
+color colProfileValue = color.rgb(0, 150, 136)
+color colProfileOutside = color.rgb(95, 105, 125)
+color colEmaFast = color.rgb(255, 255, 255)
+color colEmaSlow = color.rgb(171, 71, 188)
+
+//────────────────────────────────────────────────────────────────────
+// VWAP
+//────────────────────────────────────────────────────────────────────
+bool vwapAnchor = switch vwapAnchorInput
+    "Daily" => timeframe.change("D")
+    "Weekly" => timeframe.change("W")
+    => timeframe.change("M")
+
+float vwapValue = ta.vwap(hlc3, vwapAnchor)
+float vwapDev = ta.stdev(hlc3 - vwapValue, bandLen)
+float vwapUpper = vwapValue + vwapDev * bandMult
+float vwapLower = vwapValue - vwapDev * bandMult
+
+plot(vwapValue, "VWAP - blue fair price", color = colVWAP, linewidth = 3)
+plot(showVwapBands ? vwapUpper : na, "VWAP upper band", color = color.new(colVWAP, 78))
+plot(showVwapBands ? vwapLower : na, "VWAP lower band", color = color.new(colVWAP, 78))
+
+//────────────────────────────────────────────────────────────────────
+// Trend filter
+//────────────────────────────────────────────────────────────────────
+float emaFast = ta.ema(close, emaFastLen)
+float emaSlow = ta.ema(close, emaSlowLen)
+
+[htfClose, htfEma] = request.security(
+     syminfo.tickerid,
+     htfTf,
+     [close, ta.ema(close, htfEmaLen)],
+     lookahead = barmerge.lookahead_off)
+
+bool trendUp = emaFast > emaSlow and close > emaFast
+bool trendDown = emaFast < emaSlow and close < emaFast
+bool htfBull = htfClose > htfEma
+bool htfBear = htfClose < htfEma
+
+plot(showEMAs ? emaFast : na, "EMA fast - white", color = color.new(colEmaFast, 15), linewidth = 1)
+plot(showEMAs ? emaSlow : na, "EMA slow - purple", color = color.new(colEmaSlow, 10), linewidth = 2)
+
+//────────────────────────────────────────────────────────────────────
+// Rolling Volume Profile: POC / VAH / VAL
+//────────────────────────────────────────────────────────────────────
+var array<float> vpVolumes = array.new<float>()
+if barstate.isfirst or array.size(vpVolumes) != effectiveVpRows
+    array.clear(vpVolumes)
+    for r = 0 to effectiveVpRows - 1
+        array.push(vpVolumes, 0.0)
+
+for r = 0 to effectiveVpRows - 1
+    array.set(vpVolumes, r, 0.0)
+
+float vpHigh = ta.highest(high, effectiveVpLookback)
+float vpLow = ta.lowest(low, effectiveVpLookback)
+float vpRange = math.max(vpHigh - vpLow, syminfo.mintick)
+float rowHeight = vpRange / effectiveVpRows
+
+for i = 0 to effectiveVpLookback - 1
+    float barHigh = high[i]
+    float barLow = low[i]
+    float barClose = close[i]
+    float barVol = volume[i]
+    if not na(barHigh) and not na(barLow) and not na(barVol)
+        float barRange = math.max(barHigh - barLow, syminfo.mintick)
+        bool flatBar = math.abs(barHigh - barLow) <= syminfo.mintick
+        for r = 0 to effectiveVpRows - 1
+            float rowLow = vpLow + rowHeight * r
+            float rowHigh = rowLow + rowHeight
+            float addVol = 0.0
+            if flatBar
+                bool closeInRow = barClose >= rowLow and (barClose < rowHigh or r == effectiveVpRows - 1 and barClose <= rowHigh)
+                addVol := closeInRow ? barVol : 0.0
+            else
+                float overlap = math.max(0.0, math.min(barHigh, rowHigh) - math.max(barLow, rowLow))
+                addVol := barVol * overlap / barRange
+            array.set(vpVolumes, r, array.get(vpVolumes, r) + addVol)
+
+float totalVpVol = 0.0
+float maxRowVol = 0.0
+int pocIndex = 0
+
+for r = 0 to effectiveVpRows - 1
+    float rowVol = array.get(vpVolumes, r)
+    totalVpVol += rowVol
+    if rowVol > maxRowVol
+        maxRowVol := rowVol
+        pocIndex := r
+
+int vaLowIndex = pocIndex
+int vaHighIndex = pocIndex
+float vaTarget = totalVpVol * valueAreaPct / 100.0
+float vaAccum = array.get(vpVolumes, pocIndex)
+
+while vaAccum < vaTarget and (vaLowIndex > 0 or vaHighIndex < effectiveVpRows - 1)
+    float nextLowVol = vaLowIndex > 0 ? array.get(vpVolumes, vaLowIndex - 1) : -1.0
+    float nextHighVol = vaHighIndex < effectiveVpRows - 1 ? array.get(vpVolumes, vaHighIndex + 1) : -1.0
+    if nextHighVol >= nextLowVol
+        vaHighIndex += 1
+        vaAccum += math.max(nextHighVol, 0.0)
+    else
+        vaLowIndex -= 1
+        vaAccum += math.max(nextLowVol, 0.0)
+
+float poc = vpLow + rowHeight * (pocIndex + 0.5)
+float val = vpLow + rowHeight * vaLowIndex
+float vah = vpLow + rowHeight * (vaHighIndex + 1.0)
+
+plot(poc, "POC - yellow volume magnet", color = colPOC, linewidth = 4)
+plot(vah, "VAH - green value high", color = colVAH, linewidth = 2)
+plot(val, "VAL - red value low", color = colVAL, linewidth = 2)
+
+// Right-side profile boxes
+var array<box> profileBoxes = array.new<box>()
+
+if barstate.islast
+    clearBoxes(profileBoxes)
+    if showProfile and maxRowVol > 0
+        int xStart = bar_index + profileOffsetBars
+        for r = 0 to effectiveVpRows - 1
+            float rowLow = vpLow + rowHeight * r
+            float rowHigh = rowLow + rowHeight
+            float rowVol = array.get(vpVolumes, r)
+            int rowWidth = math.max(1, int(math.round(effectiveProfileWidthBars * rowVol / maxRowVol)))
+            color rowColor = r == pocIndex ? color.new(colPOC, 30) : r >= vaLowIndex and r <= vaHighIndex ? color.new(colProfileValue, 78) : color.new(colProfileOutside, 91)
+            box rowBox = box.new(
+                 left = xStart,
+                 top = rowHigh,
+                 right = xStart + rowWidth,
+                 bottom = rowLow,
+                 xloc = xloc.bar_index,
+                 bgcolor = rowColor,
+                 border_color = color.new(rowColor, 100))
+            array.push(profileBoxes, rowBox)
+
+//────────────────────────────────────────────────────────────────────
+// AMT logic: value location, acceptance, rejection, level areas
+//────────────────────────────────────────────────────────────────────
+float atr = ta.atr(atrLen)
+float tolerance = math.max(atr * levelToleranceAtr, syminfo.mintick)
+float valueWidth = math.max(vah - val, syminfo.mintick)
+float valuePosition = (close - val) / valueWidth
+
+bool inValue = close >= val and close <= vah
+bool aboveValue = close > vah
+bool belowValue = close < val
+bool middleValue = inValue and valuePosition > 0.35 and valuePosition < 0.65
+
+bool acceptAbove = ta.lowest(close - vah, acceptBars) > 0
+bool acceptBelow = ta.highest(close - val, acceptBars) < 0
+
+bool touchedVAH = high >= vah - tolerance and low <= vah + tolerance
+bool touchedVAL = high >= val - tolerance and low <= val + tolerance
+bool touchedPOC = high >= poc - tolerance and low <= poc + tolerance
+bool touchedVWAP = high >= vwapValue - tolerance and low <= vwapValue + tolerance
+
+bool nearVAH = nearLevel(close, vah, tolerance) or touchedVAH
+bool nearVAL = nearLevel(close, val, tolerance) or touchedVAL
+bool nearPOC = nearLevel(close, poc, tolerance) or touchedPOC
+bool nearVWAP = nearLevel(close, vwapValue, tolerance) or touchedVWAP
+bool nearAnyKeyLevel = nearVAH or nearVAL or nearPOC or nearVWAP
+
+bool valRejection = low <= val + tolerance and close > val and close > open
+bool vahRejection = high >= vah - tolerance and close < vah and close < open
+bool pocCrossUp = ta.crossover(close, poc)
+bool pocCrossDown = ta.crossunder(close, poc)
+bool vwapCrossUp = ta.crossover(close, vwapValue)
+bool vwapCrossDown = ta.crossunder(close, vwapValue)
+
+//────────────────────────────────────────────────────────────────────
+// Orderflow proxy: lower-timeframe buy/sell delta estimate + CVD
+//────────────────────────────────────────────────────────────────────
+int lowerTfSeconds = timeframe.in_seconds(lowerTf)
+int chartTfSeconds = timeframe.in_seconds(timeframe.period)
+bool ltfTimeframeValid = lowerTfSeconds <= chartTfSeconds
+bool ltfUsable = useLtfDelta and not perfFast and ltfTimeframeValid
+
+array<float> ltfOpen = array.new_float()
+array<float> ltfClose = array.new_float()
+array<float> ltfVolume = array.new_float()
+
+if ltfUsable
+    ltfOpen := request.security_lower_tf(
+         syminfo.tickerid,
+         lowerTf,
+         open,
+         ignore_invalid_timeframe = true)
+    ltfClose := request.security_lower_tf(
+         syminfo.tickerid,
+         lowerTf,
+         close,
+         ignore_invalid_timeframe = true)
+    ltfVolume := request.security_lower_tf(
+         syminfo.tickerid,
+         lowerTf,
+         volume,
+         ignore_invalid_timeframe = true)
+
+int intrabarCount = ltfUsable ? array.size(ltfClose) : 0
+bool ltfUsesIntrabars = ltfUsable and intrabarCount > 0
+
+float barDelta = 0.0
+
+if ltfUsesIntrabars
+    for n = 0 to intrabarCount - 1
+        float o = array.get(ltfOpen, n)
+        float c = array.get(ltfClose, n)
+        float v = array.get(ltfVolume, n)
+        barDelta += c > o ? v : c < o ? -v : 0.0
+else
+    barDelta := close > open ? volume : close < open ? -volume : 0.0
+
+string ltfStatusText = not useLtfDelta ? "OFF" : perfFast ? "FAST FALLBACK" : not ltfTimeframeValid ? "INVALID > CHART" : intrabarCount > 0 ? "OK" : "NO INTRABARS"
+string ltfSourceText = ltfUsesIntrabars ? "LTF" : "FALLBACK"
+color ltfStatusColor = ltfUsesIntrabars ? color.new(colBull, 10) : not useLtfDelta ? color.new(colNeutral, 35) : not ltfTimeframeValid ? color.new(colBear, 10) : perfFast ? color.new(colNeutral, 20) : color.new(colNeutral, 35)
+
+bool cvdReset = switch cvdResetInput
+    "Daily" => timeframe.change("D")
+    "Weekly" => timeframe.change("W")
+    => false
+
+var float cvd = 0.0
+cvd := cvdReset ? barDelta : nz(cvd[1]) + barDelta
+
+float deltaAbsAvg = ta.ema(math.abs(barDelta), deltaLen)
+float avgVol = ta.sma(volume, volLen)
+float relVol = avgVol > 0 ? volume / avgVol : 0.0
+
+bool bullFlow = barDelta > deltaAbsAvg * deltaMult and volume >= avgVol * volMult
+bool bearFlow = barDelta < -deltaAbsAvg * deltaMult and volume >= avgVol * volMult
+bool cvdBull = cvd > ta.ema(cvd, deltaLen) and cvd > cvd[1]
+bool cvdBear = cvd < ta.ema(cvd, deltaLen) and cvd < cvd[1]
+
+plot(barDelta, "Bar delta proxy v6.1.1", display = display.data_window)
+plot(cvd, "CVD proxy v6.1.1", display = display.data_window)
+plot(relVol, "Relative volume v6.1", display = display.data_window)
+plot(ltfUsesIntrabars ? 1 : 0, "LTF intrabar delta active v6.1.1", display = display.data_window)
+
+//────────────────────────────────────────────────────────────────────
+// Price action: market structure + engulfing + wick rejection + impulse
+//────────────────────────────────────────────────────────────────────
+float pivotHigh = ta.pivothigh(high, swingLen, swingLen)
+float pivotLow = ta.pivotlow(low, swingLen, swingLen)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+
+if not na(pivotHigh)
+    lastSwingHigh := pivotHigh
+
+if not na(pivotLow)
+    lastSwingLow := pivotLow
+
+bool bosUp = not na(lastSwingHigh) and close > lastSwingHigh and close[1] <= lastSwingHigh
+bool bosDown = not na(lastSwingLow) and close < lastSwingLow and close[1] >= lastSwingLow
+
+bool bullEngulfing = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+bool bearEngulfing = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
+
+float lowerWick = math.min(open, close) - low
+float upperWick = high - math.max(open, close)
+float body = math.abs(close - open)
+
+bool bullRejection = lowerWick >= atr * wickAtrMult and close > open
+bool bearRejection = upperWick >= atr * wickAtrMult and close < open
+bool bullImpulse = close > open and body >= atr * bodyAtrMult and volume >= avgVol * volMult
+bool bearImpulse = close < open and body >= atr * bodyAtrMult and volume >= avgVol * volMult
+
+bool bullPa = bosUp or bullEngulfing or bullRejection or bullImpulse
+bool bearPa = bosDown or bearEngulfing or bearRejection or bearImpulse
+
+plot(showStructure ? lastSwingHigh : na, "Last swing high", color = color.new(colBear, 70), style = plot.style_linebr)
+plot(showStructure ? lastSwingLow : na, "Last swing low", color = color.new(colBull, 70), style = plot.style_linebr)
+
+//────────────────────────────────────────────────────────────────────
+// V6.1 Conservative Risk Engine: Setup -> Trigger -> Confirmed -> Invalidation
+//────────────────────────────────────────────────────────────────────
+int scoreVwap = close > vwapValue ? 1 : close < vwapValue ? -1 : 0
+int scoreValue = aboveValue ? 2 : belowValue ? -2 : 0
+int scoreTrend = trendUp ? 1 : trendDown ? -1 : 0
+int scoreHtf = useHtfFilter ? (htfBull ? 1 : htfBear ? -1 : 0) : 0
+int scoreFlow = bullFlow ? 1 : bearFlow ? -1 : 0
+int scoreCvd = cvdBull ? 1 : cvdBear ? -1 : 0
+int scorePa = bullPa ? 1 : bearPa ? -1 : 0
+int scoreImpulse = bullImpulse ? 1 : bearImpulse ? -1 : 0
+int score = scoreVwap + scoreValue + scoreTrend + scoreHtf + scoreFlow + scoreCvd + scorePa + scoreImpulse
+
+bool modeScalp = tradeMode == "Scalp"
+bool modeSwing = tradeMode == "Swing"
+int modeScore = modeScalp ? 4 : modeSwing ? 6 : 5
+int requiredScore = math.max(minScoreInput, modeScore)
+int setupScore = math.max(2, requiredScore - (modeScalp ? 2 : 1))
+int effectiveCooldownBars = modeScalp ? math.max(0, int(math.round(cooldownBars * 0.5))) : modeSwing ? math.max(cooldownBars, int(math.round(cooldownBars * 1.5))) : cooldownBars
+float requiredRelVol = modeScalp ? 1.15 : modeSwing ? volMult * 1.20 : volMult
+float lowRelVolThreshold = modeScalp ? 0.85 : modeSwing ? 0.85 : 0.70
+
+bool longBreakout = acceptAbove and close > vwapValue and (bullFlow or cvdBull or bullImpulse)
+bool shortBreakdown = acceptBelow and close < vwapValue and (bearFlow or cvdBear or bearImpulse)
+
+bool longReclaim = (pocCrossUp or vwapCrossUp) and not belowValue and (bullPa or bullFlow or cvdBull)
+bool shortReclaim = (pocCrossDown or vwapCrossDown) and not aboveValue and (bearPa or bearFlow or cvdBear)
+
+bool longRetest = (nearVAL or nearPOC or nearVWAP) and close > open and close > close[1] and (bullRejection or bullEngulfing or bullFlow or cvdBull)
+bool shortRetest = (nearVAH or nearPOC or nearVWAP) and close < open and close < close[1] and (bearRejection or bearEngulfing or bearFlow or cvdBear)
+
+bool triggerLong = longBreakout or valRejection or longReclaim or longRetest or bosUp
+bool triggerShort = shortBreakdown or vahRejection or shortReclaim or shortRetest or bosDown
+
+string triggerText = triggerLong ? (longBreakout ? "LONG BREAKOUT" : valRejection ? "VAL REJECT" : longReclaim ? "LONG RECLAIM" : longRetest ? "LONG RETEST" : "BOS UP") : triggerShort ? (shortBreakdown ? "SHORT BREAKDOWN" : vahRejection ? "VAH REJECT" : shortReclaim ? "SHORT RECLAIM" : shortRetest ? "SHORT RETEST" : "BOS DOWN") : "NONE"
+
+bool middleValueBlock = noTradeFilter != "Off" and blockMiddleValue and middleValue and not nearPOC and not nearVWAP
+bool lowRelVolBlock = noTradeFilter == "Adaptive" and relVol < lowRelVolThreshold and not nearAnyKeyLevel
+bool chopBlock = noTradeFilter == "Adaptive" and not trendUp and not trendDown and middleValue
+
+bool htfOkLong = not useHtfFilter or htfBull or (modeScalp and not htfBear) or longBreakout or valRejection
+bool htfOkShort = not useHtfFilter or htfBear or (modeScalp and not htfBull) or shortBreakdown or vahRejection
+
+bool baseAwayFromLevelBlock = noTradeFilter == "Adaptive" and requireLevelTouch and not nearAnyKeyLevel and inValue
+bool impulseExceptionLong = confirmOnClose and barstate.isconfirmed and triggerLong and not triggerShort and bullImpulse and relVol >= requiredRelVol and score >= requiredScore + 1 and htfOkLong and not middleValueBlock and not lowRelVolBlock and not chopBlock
+bool impulseExceptionShort = confirmOnClose and barstate.isconfirmed and triggerShort and not triggerLong and bearImpulse and relVol >= requiredRelVol and score <= -requiredScore - 1 and htfOkShort and not middleValueBlock and not lowRelVolBlock and not chopBlock
+bool awayFromLevelBlock = baseAwayFromLevelBlock and not (impulseExceptionLong or impulseExceptionShort)
+bool noTradeZone = noTradeFilter != "Off" and (middleValueBlock or lowRelVolBlock or chopBlock or awayFromLevelBlock)
+string noTradeReason = noTradeFilter == "Off" ? "OFF" : middleValueBlock ? "MIDDLE VALUE" : lowRelVolBlock ? "LOW RELVOL" : chopBlock ? "CHOP" : awayFromLevelBlock ? "AWAY FROM LEVEL" : "OPEN"
+
+bool levelOkLong = not requireLevelTouch or nearAnyKeyLevel or acceptAbove or pocCrossUp or vwapCrossUp or valRejection or impulseExceptionLong
+bool levelOkShort = not requireLevelTouch or nearAnyKeyLevel or acceptBelow or pocCrossDown or vwapCrossDown or vahRejection or impulseExceptionShort
+
+bool qualityLong = modeScalp ? (bullPa or bullFlow or cvdBull or bullImpulse or longBreakout) : modeSwing ? ((bullFlow or cvdBull) and bullPa and relVol >= requiredRelVol and (trendUp or htfBull)) : ((bullFlow or cvdBull or bullImpulse) and (bullPa or longBreakout or valRejection or longReclaim))
+bool qualityShort = modeScalp ? (bearPa or bearFlow or cvdBear or bearImpulse or shortBreakdown) : modeSwing ? ((bearFlow or cvdBear) and bearPa and relVol >= requiredRelVol and (trendDown or htfBear)) : ((bearFlow or cvdBear or bearImpulse) and (bearPa or shortBreakdown or vahRejection or shortReclaim))
+
+bool longIntent = triggerLong or score >= setupScore or close > vwapValue or nearVAL or nearPOC or nearVWAP
+bool shortIntent = triggerShort or score <= -setupScore or close < vwapValue or nearVAH or nearPOC or nearVWAP
+bool setupLong = enableSignals and score >= setupScore and (close > vwapValue or aboveValue or nearVAL or nearPOC or nearVWAP) and htfOkLong and not noTradeZone
+bool setupShort = enableSignals and score <= -setupScore and (close < vwapValue or belowValue or nearVAH or nearPOC or nearVWAP) and htfOkShort and not noTradeZone
+string blockedReasonText = not enableSignals ? "SIGNALS OFF" : noTradeZone ? noTradeReason : triggerLong and useHtfFilter and htfBear and not htfOkLong ? "HTF BEAR" : triggerShort and useHtfFilter and htfBull and not htfOkShort ? "HTF BULL" : triggerLong and score < setupScore ? "NEG SCORE" : triggerShort and score > -setupScore ? "POS SCORE" : relVol < requiredRelVol and (triggerLong or triggerShort or longIntent or shortIntent) ? "LOW RELVOL" : (triggerLong or triggerShort) and not nearAnyKeyLevel and requireLevelTouch ? "AWAY FROM LEVEL" : not setupLong and not setupShort ? "NO SETUP" : not triggerLong and not triggerShort ? "WAITING TRIGGER" : "OPEN"
+
+bool scalpRelVolOk = not modeScalp or relVol >= requiredRelVol
+bool rawLong = setupLong and score >= requiredScore and triggerLong and levelOkLong and qualityLong and scalpRelVolOk
+bool rawShort = setupShort and score <= -requiredScore and triggerShort and levelOkShort and qualityShort and scalpRelVolOk
+
+var int lastSignalBar = na
+bool cooldownOk = na(lastSignalBar) or bar_index - lastSignalBar > effectiveCooldownBars
+
+bool confirmationOk = not confirmOnClose or barstate.isconfirmed
+bool rawConfirmedLong = rawLong and cooldownOk and not rawShort
+bool rawConfirmedShort = rawShort and cooldownOk and not rawLong
+bool confirmedLong = rawConfirmedLong and confirmationOk
+bool confirmedShort = rawConfirmedShort and confirmationOk
+bool pendingLong = rawConfirmedLong and not confirmationOk
+bool pendingShort = rawConfirmedShort and not confirmationOk
+bool earlyWarningCandidate = enableSignals and cooldownOk and not noTradeZone and not rawConfirmedLong and not rawConfirmedShort and ((setupLong and (triggerLong or score >= requiredScore - 1)) or (setupShort and (triggerShort or score <= -requiredScore + 1)))
+bool priorEarlyWarningCandidate = bar_index > 0 ? earlyWarningCandidate[1] : false
+var int lastWarningBar = na
+int warningCooldownBars = math.max(1, int(math.round(math.max(effectiveCooldownBars, 1) * 0.5)))
+bool warningCooldownOk = na(lastWarningBar) or bar_index - lastWarningBar > warningCooldownBars
+bool earlyWarning = earlyWarningCandidate and not priorEarlyWarningCandidate and warningCooldownOk
+
+if earlyWarning
+    lastWarningBar := bar_index
+
+var int activeDir = 0
+var float activeEntry = na
+var float activeInvalidation = na
+var float activeTarget1 = na
+var float activeTarget2 = na
+
+float structureLongInvalidation = math.min(val, nz(lastSwingLow, val)) - tolerance
+float structureShortInvalidation = math.max(vah, nz(lastSwingHigh, vah)) + tolerance
+float tightLongLevel = na
+tightLongLevel := val < close ? val : tightLongLevel
+tightLongLevel := poc < close and (na(tightLongLevel) or poc > tightLongLevel) ? poc : tightLongLevel
+tightLongLevel := vwapValue < close and (na(tightLongLevel) or vwapValue > tightLongLevel) ? vwapValue : tightLongLevel
+tightLongLevel := vah < close and (na(tightLongLevel) or vah > tightLongLevel) ? vah : tightLongLevel
+float tightShortLevel = na
+tightShortLevel := vah > close ? vah : tightShortLevel
+tightShortLevel := poc > close and (na(tightShortLevel) or poc < tightShortLevel) ? poc : tightShortLevel
+tightShortLevel := vwapValue > close and (na(tightShortLevel) or vwapValue < tightShortLevel) ? vwapValue : tightShortLevel
+tightShortLevel := val > close and (na(tightShortLevel) or val < tightShortLevel) ? val : tightShortLevel
+float tightLongInvalidation = na(tightLongLevel) ? structureLongInvalidation : math.min(close - syminfo.mintick, tightLongLevel - tolerance)
+float tightShortInvalidation = na(tightShortLevel) ? structureShortInvalidation : math.max(close + syminfo.mintick, tightShortLevel + tolerance)
+float hybridLongInvalidation = math.max(structureLongInvalidation, tightLongInvalidation)
+float hybridShortInvalidation = math.min(structureShortInvalidation, tightShortInvalidation)
+float proposedLongInvalidation = riskMode == "Tight" ? tightLongInvalidation : riskMode == "Hybrid" ? hybridLongInvalidation : structureLongInvalidation
+float proposedShortInvalidation = riskMode == "Tight" ? tightShortInvalidation : riskMode == "Hybrid" ? hybridShortInvalidation : structureShortInvalidation
+float longRisk = math.max(close - proposedLongInvalidation, syminfo.mintick)
+float shortRisk = math.max(proposedShortInvalidation - close, syminfo.mintick)
+
+bool stopInvalidated = (activeDir == 1 and not na(activeInvalidation) and close < activeInvalidation) or (activeDir == -1 and not na(activeInvalidation) and close > activeInvalidation)
+bool oppositeInvalidated = (activeDir == 1 and confirmedShort) or (activeDir == -1 and confirmedLong)
+bool invalidated = enableSignals and confirmationOk and activeDir != 0 and (stopInvalidated or oppositeInvalidated)
+
+if invalidated and not confirmedLong and not confirmedShort
+    activeDir := 0
+    activeEntry := na
+    activeInvalidation := na
+    activeTarget1 := na
+    activeTarget2 := na
+
+if confirmedLong
+    lastSignalBar := bar_index
+    activeDir := 1
+    activeEntry := close
+    activeInvalidation := proposedLongInvalidation
+    activeTarget1 := close + longRisk * target1R
+    activeTarget2 := close + longRisk * target2R
+else if confirmedShort
+    lastSignalBar := bar_index
+    activeDir := -1
+    activeEntry := close
+    activeInvalidation := proposedShortInvalidation
+    activeTarget1 := close - shortRisk * target1R
+    activeTarget2 := close - shortRisk * target2R
+
+string setupText = setupLong ? "SETUP LONG" : setupShort ? "SETUP SHORT" : "NONE"
+string decisionText = confirmedLong ? "CONFIRMED LONG" : confirmedShort ? "CONFIRMED SHORT" : invalidated ? "INVALIDATED" : pendingLong ? "PENDING LONG" : pendingShort ? "PENDING SHORT" : earlyWarning ? "EARLY WARNING" : setupLong ? "SETUP LONG" : setupShort ? "SETUP SHORT" : noTradeZone ? "WAIT / BLOCKED" : "WAIT"
+color decisionColor = confirmedLong ? color.new(colBull, 0) : confirmedShort ? color.new(colBear, 0) : invalidated ? color.new(color.orange, 0) : pendingLong ? color.new(colBull, 35) : pendingShort ? color.new(colBear, 35) : earlyWarning ? color.new(colPOC, 0) : setupLong ? color.new(colBull, 30) : setupShort ? color.new(colBear, 30) : noTradeZone ? color.new(colNeutral, 10) : color.new(colNeutral, 35)
+bool waitDecision = decisionText == "WAIT" or decisionText == "WAIT / BLOCKED"
+string activeSideText = activeDir == 1 ? "ACTIVE LONG" : activeDir == -1 ? "ACTIVE SHORT" : "NONE"
+color activeSideColor = activeDir == 1 ? color.new(colBull, 20) : activeDir == -1 ? color.new(colBear, 20) : color.new(colNeutral, 35)
+string activeRiskLabel = activeDir == 1 ? "Long Invalidation" : activeDir == -1 ? "Short Invalidation" : "Invalidation"
+string activeTargetLabel = activeDir == 1 ? "Long Targets" : activeDir == -1 ? "Short Targets" : "Targets"
+color triggerCellColor = waitDecision ? color.new(colNeutral, 35) : triggerLong ? color.new(colBull, 25) : triggerShort ? color.new(colBear, 25) : color.new(colNeutral, 35)
+color reasonColor = blockedReasonText == "OPEN" or blockedReasonText == "WAITING TRIGGER" ? color.new(colBull, 35) : color.new(colBear, 25)
+bool showSignalMarkers = showSignalLabels and not cleanMode
+bool showRejectionMarkers = showRejectionMarks and not cleanMode
+bool showFlowMarkers = showFlowDots and not cleanMode
+
+plotshape(showSignalMarkers and earlyWarning, "EARLY WARNING v6.1.1", style = shape.diamond, text = "SETUP", location = location.abovebar, color = color.new(colPOC, 0), textcolor = color.black, size = size.tiny)
+plotshape(showSignalMarkers and confirmedLong, "CONFIRMED LONG v6.1 stable signal", style = shape.labelup, text = "CONF LONG", location = location.belowbar, color = colBull, textcolor = color.white, size = size.small)
+plotshape(showSignalMarkers and confirmedShort, "CONFIRMED SHORT v6.1 stable signal", style = shape.labeldown, text = "CONF SHORT", location = location.abovebar, color = colBear, textcolor = color.white, size = size.small)
+plotshape(showSignalMarkers and invalidated, "INVALIDATED v6.1.1", style = shape.xcross, text = "INV", location = location.abovebar, color = color.orange, textcolor = color.white, size = size.tiny)
+
+plotshape(showRejectionMarkers and valRejection, "VAL bullish rejection", style = shape.triangleup, text = "VAL", location = location.belowbar, color = colVAL, textcolor = color.white, size = size.tiny)
+plotshape(showRejectionMarkers and vahRejection, "VAH bearish rejection", style = shape.triangledown, text = "VAH", location = location.abovebar, color = colVAH, textcolor = color.white, size = size.tiny)
+plotshape(showFlowMarkers and bullFlow, "Bull flow", style = shape.circle, location = location.belowbar, color = color.new(colBull, 45), size = size.tiny)
+plotshape(showFlowMarkers and bearFlow, "Bear flow", style = shape.circle, location = location.abovebar, color = color.new(colBear, 45), size = size.tiny)
+
+color barBiasColor = confirmedLong or score >= requiredScore ? color.new(colBull, 72) : confirmedShort or score <= -requiredScore ? color.new(colBear, 72) : noTradeZone ? color.new(colNeutral, 78) : earlyWarning ? color.new(colPOC, 82) : na
+barcolor(showBarColor ? barBiasColor : na)
+
+//────────────────────────────────────────────────────────────────────
+// V6.1 risk helper: active invalidation and target projection
+//────────────────────────────────────────────────────────────────────
+var line invalidationLine = na
+var line target1Line = na
+var line target2Line = na
+var box riskBox = na
+var box targetBox = na
+var label riskHelperLabel = na
+var label targetHelperLabel = na
+
+if barstate.islast
+    if not na(invalidationLine)
+        line.delete(invalidationLine)
+    if not na(target1Line)
+        line.delete(target1Line)
+    if not na(target2Line)
+        line.delete(target2Line)
+    if not na(riskBox)
+        box.delete(riskBox)
+    if not na(targetBox)
+        box.delete(targetBox)
+    if not na(riskHelperLabel)
+        label.delete(riskHelperLabel)
+    if not na(targetHelperLabel)
+        label.delete(targetHelperLabel)
+
+    invalidationLine := na
+    target1Line := na
+    target2Line := na
+    riskBox := na
+    targetBox := na
+    riskHelperLabel := na
+    targetHelperLabel := na
+
+    if showRiskHelper and activeDir != 0 and not na(activeEntry) and not na(activeInvalidation)
+        int riskX1 = bar_index
+        int riskX2 = bar_index + riskProjectionBars
+        color targetColor = colProfileValue
+        string helperSideText = activeDir == 1 ? "LONG" : "SHORT"
+        float riskTop = math.max(activeEntry, activeInvalidation)
+        float riskBottom = math.min(activeEntry, activeInvalidation)
+        float riskMid = (riskTop + riskBottom) * 0.5
+        float targetTop = math.max(activeTarget1, activeTarget2)
+        float targetBottom = math.min(activeTarget1, activeTarget2)
+        float targetMid = (targetTop + targetBottom) * 0.5
+
+        riskBox := box.new(left = riskX1, top = riskTop, right = riskX2, bottom = riskBottom, xloc = xloc.bar_index, bgcolor = color.new(colBear, 88), border_color = color.new(colBear, 55))
+        targetBox := box.new(left = riskX1, top = targetTop, right = riskX2, bottom = targetBottom, xloc = xloc.bar_index, bgcolor = color.new(targetColor, 88), border_color = color.new(targetColor, 45))
+        invalidationLine := line.new(riskX1, activeInvalidation, riskX2, activeInvalidation, xloc = xloc.bar_index, color = color.new(colBear, 0), style = line.style_dashed, width = 2)
+        target1Line := line.new(riskX1, activeTarget1, riskX2, activeTarget1, xloc = xloc.bar_index, color = color.new(targetColor, 0), style = line.style_dotted, width = 1)
+        target2Line := line.new(riskX1, activeTarget2, riskX2, activeTarget2, xloc = xloc.bar_index, color = color.new(targetColor, 0), style = line.style_solid, width = 1)
+        riskHelperLabel := label.new(riskX2, riskMid, helperSideText + " RISK", xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = color.new(colBear, 15), textcolor = color.white, size = size.tiny)
+        targetHelperLabel := label.new(riskX2, targetMid, helperSideText + " TARGET", xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = color.new(targetColor, 10), textcolor = color.white, size = size.tiny)
+//────────────────────────────────────────────────────────────────────
+// Beginner level tags
+//────────────────────────────────────────────────────────────────────
+var label vahTag = na
+var label valTag = na
+var label pocTag = na
+var label vwapTag = na
+var label emaTag = na
+
+if barstate.islast
+    label.delete(vahTag)
+    label.delete(valTag)
+    label.delete(pocTag)
+    label.delete(vwapTag)
+    label.delete(emaTag)
+
+    if showLevelTags
+        int tagX = bar_index + math.max(profileOffsetBars + effectiveProfileWidthBars + 3, 8)
+        vahTag := label.new(tagX, vah, "VAH / resistance\n" + formatPrice(vah), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = colVAH, textcolor = color.white, size = size.small)
+        valTag := label.new(tagX, val, "VAL / support\n" + formatPrice(val), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = colVAL, textcolor = color.white, size = size.small)
+        pocTag := label.new(tagX, poc, "POC / magnet\n" + formatPrice(poc), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = colPOC, textcolor = color.black, size = size.small)
+        vwapTag := label.new(tagX, vwapValue, "VWAP / fair price\n" + formatPrice(vwapValue), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = colVWAP, textcolor = color.white, size = size.small)
+        emaTag := showEMAs ? label.new(tagX, emaSlow, "EMA slow trend\n" + formatPrice(emaSlow), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = colEmaSlow, textcolor = color.white, size = size.tiny) : na
+
+//────────────────────────────────────────────────────────────────────
+// Alerts
+//────────────────────────────────────────────────────────────────────
+alertcondition(earlyWarning, "Crypto AMT v6.1 Early Warning", "Crypto AMT v6.1 Early Warning on {{ticker}} {{interval}}")
+alertcondition(confirmedLong, "Crypto AMT v6.1 Confirmed Long", "Crypto AMT v6.1 Confirmed Long on {{ticker}} {{interval}}")
+alertcondition(confirmedShort, "Crypto AMT v6.1 Confirmed Short", "Crypto AMT v6.1 Confirmed Short on {{ticker}} {{interval}}")
+alertcondition(invalidated, "Crypto AMT v6.1 Invalidated", "Crypto AMT v6.1 Invalidated on {{ticker}} {{interval}}")
+
+//────────────────────────────────────────────────────────────────────
+// Dashboard
+//────────────────────────────────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 17, border_width = 1)
+
+if barstate.islast and showDashboard
+    color locationColor = aboveValue ? color.new(colBull, 10) : belowValue ? color.new(colBear, 10) : middleValue ? color.new(colNeutral, 20) : color.new(colNeutral, 35)
+    color flowColor = bullFlow ? color.new(colBull, 10) : bearFlow ? color.new(colBear, 10) : color.new(colNeutral, 35)
+    color trendColor = trendUp ? color.new(colBull, 10) : trendDown ? color.new(colBear, 10) : color.new(colNeutral, 35)
+
+    string locationText = aboveValue ? "ABOVE VALUE" : belowValue ? "BELOW VALUE" : middleValue ? "MIDDLE VALUE" : inValue ? "IN VALUE" : "NA"
+    string flowText = bullFlow ? "BULL DELTA" : bearFlow ? "BEAR DELTA" : "NORMAL"
+    string trendText = trendUp ? "UPTREND" : trendDown ? "DOWNTREND" : "RANGE"
+    string htfText = useHtfFilter ? (htfBull ? "HTF BULL" : htfBear ? "HTF BEAR" : "HTF FLAT") : "OFF"
+    string paText = bosUp ? "BOS UP" : bosDown ? "BOS DOWN" : bullEngulfing ? "BULL ENGULF" : bearEngulfing ? "BEAR ENGULF" : bullRejection ? "BULL REJECT" : bearRejection ? "BEAR REJECT" : bullImpulse ? "BULL IMPULSE" : bearImpulse ? "BEAR IMPULSE" : "NONE"
+    string closeConfirmText = not confirmOnClose ? "OFF" : pendingLong ? "PENDING LONG" : pendingShort ? "PENDING SHORT" : (confirmedLong or confirmedShort or invalidated) ? "CLOSED CONFIRMED" : confirmationOk ? "BAR CLOSED" : "WAIT CLOSE"
+    color closeConfirmColor = not confirmOnClose ? color.new(colNeutral, 35) : pendingLong ? color.new(colBull, 25) : pendingShort ? color.new(colBear, 25) : (confirmedLong or confirmedShort or invalidated) ? color.new(colBull, 35) : color.new(colNeutral, 35)
+    string riskText = activeDir == 0 or na(activeInvalidation) ? "NONE" : formatPrice(activeInvalidation)
+    string targetText = activeDir == 0 or na(activeTarget1) or na(activeTarget2) ? "NONE" : formatPrice(activeTarget1) + " / " + formatPrice(activeTarget2)
+    string scorePartsText = "V" + str.tostring(scoreVwap) + " VP" + str.tostring(scoreValue) + " T" + str.tostring(scoreTrend) + " H" + str.tostring(scoreHtf) + " F" + str.tostring(scoreFlow + scoreCvd) + " PA" + str.tostring(scorePa + scoreImpulse)
+
+    table.cell(dash, 0, 0, "Crypto AMT v6.1", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 0, decisionText, text_color = color.white, bgcolor = decisionColor)
+
+    table.cell(dash, 0, 1, "Mode", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 1, tradeMode + " / " + riskMode + " / " + perfMode, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 2, "Close Confirm", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 2, closeConfirmText, text_color = color.white, bgcolor = closeConfirmColor)
+
+    table.cell(dash, 0, 3, "Score / Need", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 3, str.tostring(score) + " / " + str.tostring(setupScore) + " / " + str.tostring(requiredScore), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 4, "Score Parts", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 4, scorePartsText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 5, "Setup", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 5, setupText, text_color = color.white, bgcolor = setupLong ? color.new(colBull, 25) : setupShort ? color.new(colBear, 25) : color.new(colNeutral, 35))
+
+    table.cell(dash, 0, 6, "Trigger", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 6, triggerText, text_color = color.white, bgcolor = triggerCellColor)
+
+    table.cell(dash, 0, 7, "Active Side", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 7, activeSideText, text_color = color.white, bgcolor = activeSideColor)
+
+    table.cell(dash, 0, 8, "Block Reason", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 8, blockedReasonText, text_color = color.white, bgcolor = reasonColor)
+
+    table.cell(dash, 0, 9, activeRiskLabel, text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 9, riskText, text_color = color.white, bgcolor = activeDir == 0 ? color.new(colNeutral, 35) : color.new(colBear, 35))
+
+    table.cell(dash, 0, 10, activeTargetLabel, text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 10, targetText, text_color = color.white, bgcolor = activeDir == 1 ? color.new(colBull, 35) : activeDir == -1 ? color.new(colBear, 35) : color.new(colNeutral, 35))
+
+    table.cell(dash, 0, 11, "Location", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 11, locationText, text_color = color.white, bgcolor = locationColor)
+
+    table.cell(dash, 0, 12, "Trend / HTF", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 12, trendText + " / " + htfText, text_color = color.white, bgcolor = trendColor)
+
+    table.cell(dash, 0, 13, "Flow", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 13, flowText + " / CVD " + (cvdBull ? "BULL" : cvdBear ? "BEAR" : "FLAT"), text_color = color.white, bgcolor = flowColor)
+
+    table.cell(dash, 0, 14, "LTF Delta", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 14, ltfStatusText + " / " + ltfSourceText, text_color = color.white, bgcolor = ltfStatusColor)
+
+    table.cell(dash, 0, 15, "Delta / RelVol", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 15, formatVol(barDelta) + " / " + str.tostring(relVol, "#.##") + "x", text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 16, "PA", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 16, paText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+if barstate.islast and not showDashboard
+    table.clear(dash, 0, 0, 1, 16)
