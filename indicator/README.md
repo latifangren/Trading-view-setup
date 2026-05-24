@@ -91,6 +91,18 @@ Versi eksperimen yang menggabungkan logic conservative-risk v6.1 dengan tampilan
 
 Pilih v7.1 kalau kamu ingin langsung mencoba versi conservative-risk dengan dashboard yang paling enak dibaca saat memantau chart.
 
+### `crypto_amt_toolkit_v7_2_spec_watch.pine`
+
+Versi eksperimen berbasis v7.1 conservative-clean. Fokusnya menambah pemantauan kandidat realtime yang sengaja default-off.
+
+- `Enable Spec Watch (realtime only)` default off dan hanya bekerja saat `Confirm signals on bar close` menyala
+- status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul di realtime bar yang belum confirmed, memakai gate setup, trigger, level, quality, scalp relvol, cooldown, dan no-trade yang sama
+- Spec Watch tidak mengubah confirmed alert, active plan, invalidation, target, atau cooldown
+- `Tint Spec Watch bars amber` default off; kalau dinyalakan, bar realtime kandidat diberi tint amber ringan
+- tidak ada alertcondition Spec Watch karena kandidat realtime bisa berubah sebelum candle close
+
+Pilih v7.2 kalau kamu ingin melihat calon sinyal realtime sebelum candle close, sambil tetap menunggu Confirmed Long/Short resmi setelah close.
+
 ### `crypto_amt_toolkit_v5_signal_engine.pine`
 
 Versi kandidat eksperimen. Fokusnya bukan nambah indikator baru, tapi bikin decision layer lebih jelas. File ini tetap dipertahankan apa adanya sebagai pembanding untuk v6 stable-alert.
@@ -156,6 +168,7 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
+- pakai `crypto_amt_toolkit_v7_2_spec_watch.pine` kalau kamu mau memantau kandidat realtime default-off sebelum candle close, tanpa menambah alert Spec Watch
 - pakai `crypto_amt_toolkit_v7_1_conservative_clean.pine` kalau kamu mau eksperimen conservative-risk dengan tampilan clean dan dashboard Focus/Full ala v7
 - pakai `crypto_amt_toolkit_v7_clean_execution.pine` kalau kamu mau behavior close-confirm ala v6, tapi dengan default chart lebih bersih dan dashboard `Focus` yang menaruh `FINAL` dan `WHY` paling atas
 - pakai `crypto_amt_toolkit_v6_1_conservative_risk.pine` kalau kamu mau eksperimen filter volume/risk yang lebih konservatif tanpa mengubah v6 lama
@@ -182,6 +195,7 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 10. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
 11. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
 12. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
-13. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+13. khusus v7.2, nyalakan `Enable Spec Watch (realtime only)` di market realtime, pastikan status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul sebelum candle close, lalu coba `Tint Spec Watch bars amber` tanpa mengganggu bar color normal saat tint off
+14. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.

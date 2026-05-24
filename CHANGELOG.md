@@ -4,6 +4,9 @@ Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
 
 ## Unreleased
 
+- Added `indicator/crypto_amt_toolkit_v7_2_spec_watch.pine` as a v7.1-based Spec Watch experiment for realtime-only default-off candidates.
+- Added optional amber bar tint for v7.2 Spec Watch while keeping existing confirmed alerts and active plan state unchanged.
+- Documented v7.2 chooser guidance and manual validation checklist in the root and indicator READMEs.
 - Added `indicator/crypto_amt_toolkit_v6_1_conservative_risk.pine` as a conservative-risk experiment based on v6 stable-alert.
 - Added `indicator/crypto_amt_toolkit_v7_1_conservative_clean.pine` as a clean-dashboard conservative experiment based on v7 clean-execution.
 - Added stricter scalp relative-volume gating, key-level-aware low-relvol blocking, limited close-confirm impulse exception for away-from-level guards, and `Risk mode` Structure/Hybrid/Tight in v6.1/v7.1.
