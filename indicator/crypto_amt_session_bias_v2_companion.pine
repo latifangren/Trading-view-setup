@@ -1,0 +1,329 @@
+//@version=6
+indicator("Crypto AMT Session Bias v2 - Companion", shorttitle = "AMT Bias v2 Companion", overlay = true, max_labels_count = 200)
+
+// Inputs
+groupSessions = "1. Sessions"
+showAsiaSession = input.bool(true, "Enable Asia session", group = groupSessions)
+asiaSession = input.session("0000-0800", "Asia session", group = groupSessions)
+showLondonSession = input.bool(true, "Enable London session", group = groupSessions)
+londonSession = input.session("0700-1600", "London session", group = groupSessions)
+showNewYorkSession = input.bool(true, "Enable New York session", group = groupSessions)
+newYorkSession = input.session("1300-2200", "New York session", group = groupSessions)
+sessionTimezone = input.string("Etc/UTC", "Session timezone", options = ["Etc/UTC", "America/New_York", "Europe/London", "Asia/Tokyo", "Asia/Singapore"], group = groupSessions)
+
+groupLogic = "2. Logic"
+openingRangeMinutes = input.int(60, "Opening range minutes", minval = 1, maxval = 240, group = groupLogic)
+allowSameBarReclaim = input.bool(true, "Allow same-bar reclaim", group = groupLogic)
+confirmAlertsOnClose = input.bool(true, "Confirm alerts on bar close", group = groupLogic)
+
+groupDisplay = "3. Display"
+showCurrentLevels = input.bool(true, "Show current session levels", group = groupDisplay)
+showPreviousLevels = input.bool(true, "Show previous completed levels", group = groupDisplay)
+showOpeningRange = input.bool(true, "Show opening range", group = groupDisplay)
+showMarkers = input.bool(true, "Show sweep/reclaim markers", group = groupDisplay)
+showDashboard = input.bool(true, "Show dashboard", group = groupDisplay)
+showBackgroundTint = input.bool(false, "Show background tint", group = groupDisplay)
+showBiasBarColor = input.bool(false, "Color bars by session bias", group = groupDisplay)
+dashboardPositionInput = input.string("Bottom Right", "Dashboard position", options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"], group = groupDisplay)
+dashboardDetailInput = input.string("Compact", "Dashboard detail", options = ["Compact", "Full"], group = groupDisplay)
+
+// Helpers
+formatPrice(float value) =>
+    na(value) ? "na" : str.tostring(value, format.mintick)
+
+formatRange(float highValue, float lowValue) =>
+    na(highValue) or na(lowValue) ? "na" : formatPrice(highValue) + " / " + formatPrice(lowValue)
+
+resolveDashboardPosition(string positionInput) =>
+    switch positionInput
+        "Top Left" => position.top_left
+        "Top Right" => position.top_right
+        "Bottom Left" => position.bottom_left
+        => position.bottom_right
+
+// Session detection
+bool inAsia = showAsiaSession and not na(time(timeframe.period, asiaSession, sessionTimezone))
+bool inLondon = showLondonSession and not na(time(timeframe.period, londonSession, sessionTimezone))
+bool inNewYork = showNewYorkSession and not na(time(timeframe.period, newYorkSession, sessionTimezone))
+
+bool wasInAsia = bar_index > 0 ? inAsia[1] : false
+bool wasInLondon = bar_index > 0 ? inLondon[1] : false
+bool wasInNewYork = bar_index > 0 ? inNewYork[1] : false
+
+bool asiaStarted = inAsia and not wasInAsia
+bool londonStarted = inLondon and not wasInLondon
+bool newYorkStarted = inNewYork and not wasInNewYork
+bool asiaEnded = wasInAsia and not inAsia
+bool londonEnded = wasInLondon and not inLondon
+bool newYorkEnded = wasInNewYork and not inNewYork
+
+// Raw session state
+var float asiaOpen = na
+var float asiaHigh = na
+var float asiaLow = na
+var float asiaMid = na
+var int asiaStartTime = na
+var float asiaOpeningRangeHigh = na
+var float asiaOpeningRangeLow = na
+var float asiaOpeningRangeMid = na
+
+var float londonOpen = na
+var float londonHigh = na
+var float londonLow = na
+var float londonMid = na
+var int londonStartTime = na
+var float londonOpeningRangeHigh = na
+var float londonOpeningRangeLow = na
+var float londonOpeningRangeMid = na
+
+var float newYorkOpen = na
+var float newYorkHigh = na
+var float newYorkLow = na
+var float newYorkMid = na
+var int newYorkStartTime = na
+var float newYorkOpeningRangeHigh = na
+var float newYorkOpeningRangeLow = na
+var float newYorkOpeningRangeMid = na
+
+if asiaStarted
+    asiaOpen := open
+    asiaHigh := high
+    asiaLow := low
+    asiaMid := (high + low) * 0.5
+    asiaStartTime := time
+    asiaOpeningRangeHigh := high
+    asiaOpeningRangeLow := low
+    asiaOpeningRangeMid := (high + low) * 0.5
+else if inAsia
+    asiaHigh := na(asiaHigh) ? high : math.max(asiaHigh, high)
+    asiaLow := na(asiaLow) ? low : math.min(asiaLow, low)
+    asiaMid := (asiaHigh + asiaLow) * 0.5
+    bool inAsiaOpeningRange = not na(asiaStartTime) and time < asiaStartTime + openingRangeMinutes * 60000
+    if inAsiaOpeningRange
+        asiaOpeningRangeHigh := na(asiaOpeningRangeHigh) ? high : math.max(asiaOpeningRangeHigh, high)
+        asiaOpeningRangeLow := na(asiaOpeningRangeLow) ? low : math.min(asiaOpeningRangeLow, low)
+        asiaOpeningRangeMid := (asiaOpeningRangeHigh + asiaOpeningRangeLow) * 0.5
+
+if londonStarted
+    londonOpen := open
+    londonHigh := high
+    londonLow := low
+    londonMid := (high + low) * 0.5
+    londonStartTime := time
+    londonOpeningRangeHigh := high
+    londonOpeningRangeLow := low
+    londonOpeningRangeMid := (high + low) * 0.5
+else if inLondon
+    londonHigh := na(londonHigh) ? high : math.max(londonHigh, high)
+    londonLow := na(londonLow) ? low : math.min(londonLow, low)
+    londonMid := (londonHigh + londonLow) * 0.5
+    bool inLondonOpeningRange = not na(londonStartTime) and time < londonStartTime + openingRangeMinutes * 60000
+    if inLondonOpeningRange
+        londonOpeningRangeHigh := na(londonOpeningRangeHigh) ? high : math.max(londonOpeningRangeHigh, high)
+        londonOpeningRangeLow := na(londonOpeningRangeLow) ? low : math.min(londonOpeningRangeLow, low)
+        londonOpeningRangeMid := (londonOpeningRangeHigh + londonOpeningRangeLow) * 0.5
+
+if newYorkStarted
+    newYorkOpen := open
+    newYorkHigh := high
+    newYorkLow := low
+    newYorkMid := (high + low) * 0.5
+    newYorkStartTime := time
+    newYorkOpeningRangeHigh := high
+    newYorkOpeningRangeLow := low
+    newYorkOpeningRangeMid := (high + low) * 0.5
+else if inNewYork
+    newYorkHigh := na(newYorkHigh) ? high : math.max(newYorkHigh, high)
+    newYorkLow := na(newYorkLow) ? low : math.min(newYorkLow, low)
+    newYorkMid := (newYorkHigh + newYorkLow) * 0.5
+    bool inNewYorkOpeningRange = not na(newYorkStartTime) and time < newYorkStartTime + openingRangeMinutes * 60000
+    if inNewYorkOpeningRange
+        newYorkOpeningRangeHigh := na(newYorkOpeningRangeHigh) ? high : math.max(newYorkOpeningRangeHigh, high)
+        newYorkOpeningRangeLow := na(newYorkOpeningRangeLow) ? low : math.min(newYorkOpeningRangeLow, low)
+        newYorkOpeningRangeMid := (newYorkOpeningRangeHigh + newYorkOpeningRangeLow) * 0.5
+
+// Previous completed session updates only on raw session end.
+var string previousSessionName = "None"
+var float previousSessionOpen = na
+var float previousSessionHigh = na
+var float previousSessionLow = na
+var float previousSessionMid = na
+bool previousTargetChanged = false
+
+if asiaEnded and not na(asiaHigh) and not na(asiaLow)
+    previousSessionName := "Asia"
+    previousSessionOpen := asiaOpen
+    previousSessionHigh := asiaHigh
+    previousSessionLow := asiaLow
+    previousSessionMid := asiaMid
+    previousTargetChanged := true
+
+if londonEnded and not na(londonHigh) and not na(londonLow)
+    previousSessionName := "London"
+    previousSessionOpen := londonOpen
+    previousSessionHigh := londonHigh
+    previousSessionLow := londonLow
+    previousSessionMid := londonMid
+    previousTargetChanged := true
+
+if newYorkEnded and not na(newYorkHigh) and not na(newYorkLow)
+    previousSessionName := "New York"
+    previousSessionOpen := newYorkOpen
+    previousSessionHigh := newYorkHigh
+    previousSessionLow := newYorkLow
+    previousSessionMid := newYorkMid
+    previousTargetChanged := true
+
+// Display priority remains New York > London > Asia.
+string activeSessionName = inNewYork ? "New York" : inLondon ? "London" : inAsia ? "Asia" : "None"
+bool inActiveSession = activeSessionName != "None"
+float sessionOpen = activeSessionName == "New York" ? newYorkOpen : activeSessionName == "London" ? londonOpen : activeSessionName == "Asia" ? asiaOpen : na
+float sessionHigh = activeSessionName == "New York" ? newYorkHigh : activeSessionName == "London" ? londonHigh : activeSessionName == "Asia" ? asiaHigh : na
+float sessionLow = activeSessionName == "New York" ? newYorkLow : activeSessionName == "London" ? londonLow : activeSessionName == "Asia" ? asiaLow : na
+float sessionMid = activeSessionName == "New York" ? newYorkMid : activeSessionName == "London" ? londonMid : activeSessionName == "Asia" ? asiaMid : na
+float openingRangeHigh = activeSessionName == "New York" ? newYorkOpeningRangeHigh : activeSessionName == "London" ? londonOpeningRangeHigh : activeSessionName == "Asia" ? asiaOpeningRangeHigh : na
+float openingRangeLow = activeSessionName == "New York" ? newYorkOpeningRangeLow : activeSessionName == "London" ? londonOpeningRangeLow : activeSessionName == "Asia" ? asiaOpeningRangeLow : na
+float openingRangeMid = activeSessionName == "New York" ? newYorkOpeningRangeMid : activeSessionName == "London" ? londonOpeningRangeMid : activeSessionName == "Asia" ? asiaOpeningRangeMid : na
+
+// Sweep, reclaim, bias state
+var string currentSessionName = "None"
+var bool highSweptThisSession = false
+var bool lowSweptThisSession = false
+var bool highReclaimedThisSession = false
+var bool lowReclaimedThisSession = false
+var int highSweepBar = na
+var int lowSweepBar = na
+var int biasState = 0
+var string lastEvent = "None"
+
+bool displayedSessionChanged = activeSessionName != currentSessionName
+if displayedSessionChanged or previousTargetChanged
+    bool startingSession = inActiveSession and displayedSessionChanged
+    bool endingSession = not inActiveSession and currentSessionName != "None"
+    currentSessionName := activeSessionName
+    highSweptThisSession := false
+    lowSweptThisSession := false
+    highReclaimedThisSession := false
+    lowReclaimedThisSession := false
+    highSweepBar := na
+    lowSweepBar := na
+    biasState := 0
+    lastEvent := previousTargetChanged ? "Previous Updated" : startingSession ? "Session Start" : endingSession ? "Session End" : "None"
+
+bool hasPreviousLevels = not na(previousSessionHigh) and not na(previousSessionLow)
+bool alertReady = not confirmAlertsOnClose or barstate.isconfirmed
+bool sweepHighEvent = inActiveSession and hasPreviousLevels and not highSweptThisSession and high > previousSessionHigh
+bool sweepLowEvent = inActiveSession and hasPreviousLevels and not lowSweptThisSession and low < previousSessionLow
+
+if sweepHighEvent
+    highSweptThisSession := true
+    highSweepBar := bar_index
+    lastEvent := "Sweep High"
+
+if sweepLowEvent
+    lowSweptThisSession := true
+    lowSweepBar := bar_index
+    lastEvent := "Sweep Low"
+
+bool highReclaimReady = highSweptThisSession and not highReclaimedThisSession and not na(previousSessionHigh) and (allowSameBarReclaim or bar_index > highSweepBar)
+bool lowReclaimReady = lowSweptThisSession and not lowReclaimedThisSession and not na(previousSessionLow) and (allowSameBarReclaim or bar_index > lowSweepBar)
+bool reclaimAfterHighSweep = inActiveSession and highReclaimReady and close < previousSessionHigh
+bool reclaimAfterLowSweep = inActiveSession and lowReclaimReady and close > previousSessionLow
+
+bool biasFlip = false
+if reclaimAfterHighSweep
+    highReclaimedThisSession := true
+    biasFlip := biasState != -1
+    biasState := -1
+    lastEvent := "Bear Reclaim"
+
+if reclaimAfterLowSweep
+    lowReclaimedThisSession := true
+    biasFlip := biasState != 1
+    biasState := 1
+    lastEvent := "Bull Reclaim"
+
+string biasText = biasState == 1 ? "BULLISH" : biasState == -1 ? "BEARISH" : "NEUTRAL"
+color biasColor = biasState == 1 ? color.new(color.lime, 20) : biasState == -1 ? color.new(color.red, 20) : color.new(color.gray, 35)
+bool alertSweepHigh = sweepHighEvent and alertReady
+bool alertSweepLow = sweepLowEvent and alertReady
+bool alertReclaimAfterSweep = (reclaimAfterHighSweep or reclaimAfterLowSweep) and alertReady
+bool alertBiasFlip = biasFlip and alertReady
+
+// Plots
+color colCurrentHigh = color.rgb(76, 175, 80)
+color colCurrentLow = color.rgb(244, 67, 54)
+color colCurrentMid = color.rgb(120, 130, 145)
+color colCurrentOpen = color.rgb(255, 193, 7)
+color colOpeningRange = color.rgb(33, 150, 243)
+color colPrevious = color.rgb(156, 39, 176)
+
+plot(showCurrentLevels and inActiveSession ? sessionHigh : na, "Current Session High", color = color.new(colCurrentHigh, 35), linewidth = 1, style = plot.style_linebr)
+plot(showCurrentLevels and inActiveSession ? sessionLow : na, "Current Session Low", color = color.new(colCurrentLow, 35), linewidth = 1, style = plot.style_linebr)
+plot(showCurrentLevels and inActiveSession ? sessionMid : na, "Current Session Mid", color = color.new(colCurrentMid, 45), linewidth = 1, style = plot.style_linebr)
+plot(showCurrentLevels and inActiveSession ? sessionOpen : na, "Current Session Open", color = color.new(colCurrentOpen, 35), linewidth = 1, style = plot.style_linebr)
+
+plot(showOpeningRange and inActiveSession ? openingRangeHigh : na, "Opening Range High", color = color.new(colOpeningRange, 45), linewidth = 1, style = plot.style_linebr)
+plot(showOpeningRange and inActiveSession ? openingRangeLow : na, "Opening Range Low", color = color.new(colOpeningRange, 45), linewidth = 1, style = plot.style_linebr)
+plot(showOpeningRange and inActiveSession ? openingRangeMid : na, "Opening Range Mid", color = color.new(colOpeningRange, 65), linewidth = 1, style = plot.style_linebr)
+
+plot(showPreviousLevels ? previousSessionHigh : na, "Previous Session High", color = color.new(colPrevious, 35), linewidth = 1, style = plot.style_linebr)
+plot(showPreviousLevels ? previousSessionLow : na, "Previous Session Low", color = color.new(colPrevious, 35), linewidth = 1, style = plot.style_linebr)
+
+bgcolor(showBackgroundTint and inActiveSession ? color.new(biasState == 1 ? color.lime : biasState == -1 ? color.red : color.gray, 92) : na)
+barcolor(showBiasBarColor and biasState != 0 ? color.new(biasState == 1 ? color.lime : color.red, 25) : na)
+
+// Markers
+plotshape(showMarkers and sweepHighEvent, "Sweep High", shape.triangledown, location.abovebar, color.new(color.red, 0), text = "Sweep High", textcolor = color.white, size = size.tiny)
+plotshape(showMarkers and sweepLowEvent, "Sweep Low", shape.triangleup, location.belowbar, color.new(color.lime, 0), text = "Sweep Low", textcolor = color.black, size = size.tiny)
+plotshape(showMarkers and reclaimAfterHighSweep, "Bearish Reclaim", shape.labeldown, location.abovebar, color.new(color.red, 0), text = "Reclaim\nBear Bias", textcolor = color.white, size = size.tiny)
+plotshape(showMarkers and reclaimAfterLowSweep, "Bullish Reclaim", shape.labelup, location.belowbar, color.new(color.lime, 0), text = "Reclaim\nBull Bias", textcolor = color.black, size = size.tiny)
+
+// Alerts
+alertcondition(alertSweepHigh, "AMT Session Bias v2 Sweep High", "AMT Session Bias v2 Sweep High on {{ticker}} {{interval}}")
+alertcondition(alertSweepLow, "AMT Session Bias v2 Sweep Low", "AMT Session Bias v2 Sweep Low on {{ticker}} {{interval}}")
+alertcondition(alertReclaimAfterSweep, "AMT Session Bias v2 Reclaim After Sweep", "AMT Session Bias v2 Reclaim After Sweep on {{ticker}} {{interval}}")
+alertcondition(alertBiasFlip, "AMT Session Bias v2 Bias Flip", "AMT Session Bias v2 Bias Flip on {{ticker}} {{interval}}")
+
+// Dashboard
+dashboardPosition = resolveDashboardPosition(dashboardPositionInput)
+var table dash = table.new(dashboardPosition, 2, 11, border_width = 1)
+
+if barstate.islast and showDashboard
+    bool dashboardFull = dashboardDetailInput == "Full"
+    string sweepText = highSweptThisSession and lowSweptThisSession ? "HIGH + LOW" : highSweptThisSession ? "HIGH" : lowSweptThisSession ? "LOW" : "NONE"
+
+    table.cell(dash, 0, 0, "AMT Session Bias v2", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 0, biasText, text_color = color.white, bgcolor = biasColor)
+
+    table.cell(dash, 0, 1, "Active Session", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 1, currentSessionName, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 2, "Previous Session", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 2, previousSessionName, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 3, "Previous H / L", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 3, formatRange(previousSessionHigh, previousSessionLow), text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 4, "Sweep State", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 4, sweepText, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 5, "Last Event", text_color = color.white, bgcolor = color.new(color.black, 30))
+    table.cell(dash, 1, 5, lastEvent, text_color = color.white, bgcolor = color.new(color.black, 75))
+
+    table.cell(dash, 0, 6, dashboardFull ? "Current H / L" : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 30) : color.new(color.black, 100))
+    table.cell(dash, 1, 6, dashboardFull ? formatRange(sessionHigh, sessionLow) : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 75) : color.new(color.black, 100))
+
+    table.cell(dash, 0, 7, dashboardFull ? "Current Mid / Open" : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 30) : color.new(color.black, 100))
+    table.cell(dash, 1, 7, dashboardFull ? formatPrice(sessionMid) + " / " + formatPrice(sessionOpen) : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 75) : color.new(color.black, 100))
+
+    table.cell(dash, 0, 8, dashboardFull ? "Opening Range" : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 30) : color.new(color.black, 100))
+    table.cell(dash, 1, 8, dashboardFull ? formatRange(openingRangeHigh, openingRangeLow) : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 75) : color.new(color.black, 100))
+
+    table.cell(dash, 0, 9, dashboardFull ? "Previous Mid / Open" : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 30) : color.new(color.black, 100))
+    table.cell(dash, 1, 9, dashboardFull ? formatPrice(previousSessionMid) + " / " + formatPrice(previousSessionOpen) : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 75) : color.new(color.black, 100))
+
+    table.cell(dash, 0, 10, dashboardFull ? "Alerts" : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 30) : color.new(color.black, 100))
+    table.cell(dash, 1, 10, dashboardFull ? (confirmAlertsOnClose ? "Close Confirm" : "Intrabar") : "", text_color = color.white, bgcolor = dashboardFull ? color.new(color.black, 75) : color.new(color.black, 100))
+else if barstate.islast and not showDashboard
+    table.clear(dash, 0, 0, 1, 10)
