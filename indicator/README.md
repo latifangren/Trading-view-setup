@@ -26,6 +26,20 @@ Indikator session bias yang ringan untuk baca Asia, London, dan New York tanpa V
 
 Pilih Session Bias v1 kalau targetmu cuma membaca alur session: apakah harga sweep high/low session sebelumnya lalu reclaim. Ini lebih sederhana daripada toolkit confluence v3/v6, dan cocok dipasang berdampingan dengan indikator lain.
 
+### `crypto_amt_session_bias_v2_companion.pine`
+
+Companion session bias generasi baru yang tetap berdiri sendiri sebagai `indicator(...)`, bukan `strategy(...)`, dan bukan bagian logic internal toolkit v6 atau v7.
+
+- tetap track Asia, London, dan New York secara terpisah
+- kalau sesi overlap, display aktif tetap pakai prioritas New York > London > Asia
+- perbaikan utamanya ada di semantics overlap: previous completed session high/low hanya update saat raw session end asli terjadi pada `asiaEnded`, `londonEnded`, atau `newYorkEnded`, bukan saat active priority bergeser karena overlap
+- default dashboard ada di `Bottom Right`
+- default `Dashboard detail` adalah `Compact`
+- alert default tetap close-confirm, jadi notifikasi menunggu candle close saat opsi confirm aktif
+- alert sengaja dibatasi jadi empat jenis saja: `Sweep High`, `Sweep Low`, `Reclaim After Sweep`, dan `Bias Flip`
+
+Pilih Session Bias v2 Companion kalau kamu sudah nyaman pakai toolkit modern v6.1, v6.2, v7.2, atau v7.3, lalu butuh panel session bias yang berdampingan tanpa ikut mengubah logic confluence toolkit. Kalau kamu cuma butuh versi ringan lama, v1 tetap ada dan tetap tidak berubah. Panduan cepatnya ada di [Panduan Pemula Crypto AMT Session Bias v2 Companion](docs/crypto-amt-session-bias-v2-companion-panduan-pemula.md).
+
 ### `crypto_amt_toolkit_RECOMMENDED.pine`
 
 File paling aman untuk pemula yang ingin langsung mulai tanpa bingung pilih versi.
@@ -67,6 +81,18 @@ Versi eksperimen berbasis v6 stable-alert. Fokusnya mengetes filter sinyal dan r
 
 Pilih v6.1 kalau kamu ingin mengetes apakah setup 5m/15m jadi lebih tahan terhadap volume kering dan whipsaw tanpa kehilangan behavior alert aman dari v6.
 
+### `crypto_amt_toolkit_v6_2_info_auto_perf.pine`
+
+Versi eksperimen berbasis v6.1 conservative-risk. Fokusnya mempertahankan layar yang kaya informasi, tapi menambah mode performa otomatis supaya timeframe besar lebih ringan.
+
+- default visual tetap informatif seperti v6.1: VP boxes, VWAP bands, EMA, labels, risk helper, bar color, level tags, dan dashboard tetap on
+- `Performance mode` default `Auto`; Auto resolve ke `Fast` pada 1H ke atas, dan ke `Balanced` pada timeframe lebih kecil
+- `Fast` tetap mematikan lower-timeframe delta berat dan mengurangi beban Volume Profile seperti mode performa sebelumnya
+- dashboard bisa dipindah lewat `Dashboard position`
+- `Signal Grade` dan `Volatility` hanya display-only; tidak mengubah confirmed signal, alert, cooldown, risk, target, atau no-trade logic
+
+Pilih v6.2 kalau kamu sekarang nyaman dengan v6.1 karena informasinya lengkap, tapi ingin default yang lebih aman dari timeout pada 1H tanpa perlu manual ganti `Performance mode` ke `Fast`.
+
 ### `crypto_amt_toolkit_v7_clean_execution.pine`
 
 Versi clean-execution berbasis v6 stable-alert. Fokusnya bukan mengubah decision layer utama, tapi merapikan default chart dan dashboard supaya keputusan akhir lebih cepat terbaca.
@@ -102,6 +128,18 @@ Versi eksperimen berbasis v7.1 conservative-clean. Fokusnya menambah pemantauan 
 - tidak ada alertcondition Spec Watch karena kandidat realtime bisa berubah sebelum candle close
 
 Pilih v7.2 kalau kamu ingin melihat calon sinyal realtime sebelum candle close, sambil tetap menunggu Confirmed Long/Short resmi setelah close.
+
+### `crypto_amt_toolkit_v7_3_auto_performance.pine`
+
+Versi eksperimen berbasis v7.2 spec-watch. Fokusnya menjaga tampilan clean v7.2, sambil menambah default performa otomatis dan beberapa info ringkas di dashboard.
+
+- `Performance mode` default `Auto`; Auto resolve ke `Fast` pada 1H ke atas, dan ke `Balanced` pada timeframe lebih kecil
+- behavior Spec Watch tetap sama seperti v7.2: default off, realtime-only, tanpa alert Spec Watch
+- dashboard `Focus` tetap menaruh `FINAL` dan `WHY` di atas, lalu menambah `Performance`, `Signal Grade`, dan `Volatility`
+- dashboard bisa dipindah lewat `Dashboard position`
+- `Signal Grade` dan `Volatility` hanya display-only; tidak mengubah confirmed signal, Spec Watch, alert, cooldown, risk, target, atau no-trade logic
+
+Pilih v7.3 kalau kamu ingin alur clean/spec-watch v7.2, tapi tidak mau ingat manual set `Performance mode` ke `Fast` saat pindah ke 1H atau timeframe lebih besar.
 
 ### `crypto_amt_toolkit_v5_signal_engine.pine`
 
@@ -168,9 +206,12 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
+- pakai `crypto_amt_session_bias_v2_companion.pine` kalau kamu ingin session bias standalone yang lebih pas dipasang di samping v6.1, v6.2, v7.2, atau v7.3, dengan dashboard default `Bottom Right`, detail `Compact`, dan pembaruan previous completed level yang hanya terjadi saat raw session end
+- pakai `crypto_amt_toolkit_v7_3_auto_performance.pine` kalau kamu mau v7.2 clean/spec-watch dengan default auto-performance, dashboard position, Signal Grade, dan Volatility display-only
 - pakai `crypto_amt_toolkit_v7_2_spec_watch.pine` kalau kamu mau memantau kandidat realtime default-off sebelum candle close, tanpa menambah alert Spec Watch
 - pakai `crypto_amt_toolkit_v7_1_conservative_clean.pine` kalau kamu mau eksperimen conservative-risk dengan tampilan clean dan dashboard Focus/Full ala v7
 - pakai `crypto_amt_toolkit_v7_clean_execution.pine` kalau kamu mau behavior close-confirm ala v6, tapi dengan default chart lebih bersih dan dashboard `Focus` yang menaruh `FINAL` dan `WHY` paling atas
+- pakai `crypto_amt_toolkit_v6_2_info_auto_perf.pine` kalau kamu mau v6.1 yang tetap ramai informasi tapi lebih aman di 1H karena default auto-performance
 - pakai `crypto_amt_toolkit_v6_1_conservative_risk.pine` kalau kamu mau eksperimen filter volume/risk yang lebih konservatif tanpa mengubah v6 lama
 - pakai `crypto_amt_toolkit_v6_stable_alert.pine` kalau mau decision layer v5 dengan alert close-confirm yang lebih aman dan visual default lebih ringan
 - pakai `crypto_amt_toolkit_v3_precision.pine` kalau mau versi utama yang stabil dan direkomendasikan
@@ -189,13 +230,18 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 4. cek apakah level VP, VWAP, signal, dan dashboard muncul sesuai ekspektasi
 5. khusus Session Bias v1, cek timezone dan jam session, pastikan overlap mengikuti prioritas New York > London > Asia
 6. khusus Session Bias v1, cek current high/low/mid/open, opening range, previous high/low, marker Sweep High/Sweep Low, reclaim, bias, dashboard, dan alertcondition muncul sesuai ekspektasi
-7. khusus v4, cek juga status LTF, fallback, dan mode performanya
-8. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
-9. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
-10. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
-11. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
-12. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
-13. khusus v7.2, nyalakan `Enable Spec Watch (realtime only)` di market realtime, pastikan status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul sebelum candle close, lalu coba `Tint Spec Watch bars amber` tanpa mengganggu bar color normal saat tint off
-14. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+7. khusus Session Bias v2 Companion, cek bahwa script tetap masuk sebagai `indicator(...)`, bukan `strategy(...)`, lalu pastikan dashboard default muncul di `Bottom Right` dengan detail `Compact`
+8. khusus Session Bias v2 Companion, cek bahwa previous completed high/low tidak berubah saat sesi overlap hanya karena prioritas aktif pindah, lalu pastikan level baru hanya update setelah raw session end Asia, London, atau New York benar-benar selesai
+9. khusus Session Bias v2 Companion, cek empat alert saja yang tersedia, `Sweep High`, `Sweep Low`, `Reclaim After Sweep`, dan `Bias Flip`, lalu pastikan behavior close-confirm tetap menunggu candle close saat opsi confirm aktif
+10. khusus v4, cek juga status LTF, fallback, dan mode performanya
+11. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
+12. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
+13. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
+14. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
+15. khusus v6.2, cek `Performance mode = Auto` di 1H dan timeframe kecil; pastikan dashboard menampilkan resolved mode, `Signal Grade`, `Volatility`, dan posisi dashboard sesuai input
+16. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
+17. khusus v7.2, nyalakan `Enable Spec Watch (realtime only)` di market realtime, pastikan status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul sebelum candle close, lalu coba `Tint Spec Watch bars amber` tanpa mengganggu bar color normal saat tint off
+18. khusus v7.3, cek semua poin v7.2 plus `Performance mode = Auto`, dashboard position, `Signal Grade`, dan `Volatility`; pastikan info baru tidak membuat alert tambahan
+19. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.
