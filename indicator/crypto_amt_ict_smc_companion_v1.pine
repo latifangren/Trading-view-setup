@@ -1,0 +1,411 @@
+//@version=6
+indicator("Crypto AMT ICT SMC Companion v1", shorttitle = "AMT ICT SMC v1", overlay = true, max_boxes_count = 120, max_lines_count = 120, max_labels_count = 120)
+
+// Inputs
+groupRange = "1. Range / Premium Discount"
+rangeLen = input.int(10, "Swing length", minval = 3, maxval = 50, group = groupRange)
+rangeFallbackBars = input.int(80, "Fallback range bars", minval = 20, maxval = 300, group = groupRange)
+showPdZones = input.bool(true, "Show premium/discount zones", group = groupRange)
+showEquilibrium = input.bool(true, "Show equilibrium line", group = groupRange)
+
+groupFvg = "2. FVG / IFVG"
+showFvg = input.bool(true, "Show FVG zones", group = groupFvg)
+showCe = input.bool(true, "Show CE midpoint", group = groupFvg)
+showIfvg = input.bool(true, "Show IFVG flips", group = groupFvg)
+showMitigatedFvg = input.bool(false, "Keep mitigated FVGs", group = groupFvg)
+fvgMinAtrMult = input.float(0.8, "Min displacement ATR", minval = 0.1, maxval = 4.0, step = 0.1, group = groupFvg)
+maxFvgCount = input.int(6, "Max active FVGs", minval = 1, maxval = 20, group = groupFvg)
+maxIfvgCount = input.int(4, "Max active IFVGs", minval = 1, maxval = 15, group = groupFvg)
+
+groupOb = "3. Validated OB"
+showOb = input.bool(true, "Show scored OB zones", group = groupOb)
+obSearchBars = input.int(8, "Opposite candle search bars", minval = 2, maxval = 20, group = groupOb)
+minObScore = input.int(4, "Min OB score", minval = 1, maxval = 7, group = groupOb)
+maxObCount = input.int(5, "Max active OBs", minval = 1, maxval = 15, group = groupOb)
+
+groupCisd = "4. CISD"
+showCisd = input.bool(true, "Show CISD markers", group = groupCisd)
+maxCisdMarks = input.int(8, "Max CISD markers", minval = 1, maxval = 30, group = groupCisd)
+
+groupDisplay = "5. Display"
+showDashboard = input.bool(true, "Show dashboard", group = groupDisplay)
+dashboardPositionInput = input.string("Bottom Left", "Dashboard position", options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"], group = groupDisplay)
+extendBars = input.int(20, "Zone projection bars", minval = 5, maxval = 80, group = groupDisplay)
+showSetupMarkers = input.bool(true, "Show setup markers", group = groupDisplay)
+
+groupAlerts = "6. Alerts"
+confirmAlertsOnClose = input.bool(true, "Confirm alerts on bar close", group = groupAlerts)
+minSetupScore = input.int(5, "Min setup score", minval = 3, maxval = 9, group = groupAlerts)
+
+// Types
+type FvgZone
+    int idx
+    float top
+    float bottom
+    bool isBullish
+    bool mitigated
+    box bx
+    line ceLine
+
+type IfvgZone
+    int idx
+    float top
+    float bottom
+    bool isBullish
+    bool mitigated
+    box bx
+    label lbl
+
+type ObZone
+    int idx
+    float top
+    float bottom
+    bool isBullish
+    bool mitigated
+    int score
+    box bx
+    label lbl
+
+// Helpers
+resolveDashboardPosition(string positionInput) =>
+    switch positionInput
+        "Top Left" => position.top_left
+        "Top Right" => position.top_right
+        "Bottom Left" => position.bottom_left
+        => position.bottom_right
+
+formatPrice(float value) =>
+    na(value) ? "na" : str.tostring(value, format.mintick)
+
+scoreText(int score) =>
+    score >= 7 ? "A" : score >= 5 ? "B" : score >= 3 ? "C" : score > 0 ? "D" : "-"
+
+deleteFvg(FvgZone f) =>
+    box.delete(f.bx)
+    if not na(f.ceLine)
+        line.delete(f.ceLine)
+
+deleteIfvg(IfvgZone z) =>
+    box.delete(z.bx)
+    label.delete(z.lbl)
+
+deleteOb(ObZone z) =>
+    box.delete(z.bx)
+    label.delete(z.lbl)
+
+findBearishOffset(int barsBack) =>
+    int result = na
+    for i = 1 to barsBack
+        if na(result) and close[i] < open[i]
+            result := i
+    result
+
+findBullishOffset(int barsBack) =>
+    int result = na
+    for i = 1 to barsBack
+        if na(result) and close[i] > open[i]
+            result := i
+    result
+
+// State containers
+var array<FvgZone> fvgZones = array.new<FvgZone>()
+var array<IfvgZone> ifvgZones = array.new<IfvgZone>()
+var array<ObZone> obZones = array.new<ObZone>()
+var array<label> cisdLabels = array.new_label()
+
+// Range / premium-discount context
+swingHighValue = ta.pivothigh(high, rangeLen, rangeLen)
+swingLowValue = ta.pivotlow(low, rangeLen, rangeLen)
+
+var float lastSwingHigh = na
+var float lastSwingLow = na
+var int lastSwingHighIdx = na
+var int lastSwingLowIdx = na
+
+if not na(swingHighValue)
+    lastSwingHigh := swingHighValue
+    lastSwingHighIdx := bar_index - rangeLen
+
+if not na(swingLowValue)
+    lastSwingLow := swingLowValue
+    lastSwingLowIdx := bar_index - rangeLen
+
+fallbackHigh = ta.highest(high, rangeFallbackBars)
+fallbackLow = ta.lowest(low, rangeFallbackBars)
+rangeHigh = not na(lastSwingHigh) ? lastSwingHigh : fallbackHigh
+rangeLow = not na(lastSwingLow) ? lastSwingLow : fallbackLow
+rangeReady = not na(rangeHigh) and not na(rangeLow) and rangeHigh > rangeLow
+rangeMid = rangeReady ? (rangeHigh + rangeLow) * 0.5 : na
+inPremium = rangeReady and close > rangeMid
+inDiscount = rangeReady and close < rangeMid
+zoneText = inPremium ? "PREMIUM" : inDiscount ? "DISCOUNT" : rangeReady ? "EQUILIBRIUM" : "NA"
+
+var box premiumBox = na
+var box discountBox = na
+var line equilibriumLine = na
+var label equilibriumLabel = na
+
+if barstate.islast and showPdZones and rangeReady
+    box.delete(premiumBox)
+    box.delete(discountBox)
+    line.delete(equilibriumLine)
+    label.delete(equilibriumLabel)
+
+    premiumBox := box.new(left = bar_index - rangeFallbackBars, top = rangeHigh, right = bar_index + extendBars, bottom = rangeMid, border_color = color.new(color.red, 100), bgcolor = color.new(color.red, 94), xloc = xloc.bar_index)
+    discountBox := box.new(left = bar_index - rangeFallbackBars, top = rangeMid, right = bar_index + extendBars, bottom = rangeLow, border_color = color.new(color.lime, 100), bgcolor = color.new(color.lime, 94), xloc = xloc.bar_index)
+
+    if showEquilibrium
+        equilibriumLine := line.new(bar_index - rangeFallbackBars, rangeMid, bar_index + extendBars, rangeMid, xloc = xloc.bar_index, extend = extend.none, color = color.new(color.gray, 40), style = line.style_dotted, width = 1)
+        equilibriumLabel := label.new(bar_index + extendBars, rangeMid, "EQ", xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.gray, 90), style = label.style_label_left, textcolor = color.gray, size = size.tiny)
+
+// CISD display-only state
+var float lastBearishOpen = na
+var float lastBullishOpen = na
+
+bullishCisd = not na(lastBearishOpen) and close > lastBearishOpen
+bearishCisd = not na(lastBullishOpen) and close < lastBullishOpen
+cisdText = bullishCisd and bearishCisd ? "MIXED" : bullishCisd ? "BULL" : bearishCisd ? "BEAR" : "NONE"
+
+if showCisd and barstate.isconfirmed and bullishCisd and not bullishCisd[1]
+    label cisdLabel = label.new(bar_index, low, "CISD B", xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.lime, 82), style = label.style_label_up, textcolor = color.lime, size = size.tiny)
+    array.push(cisdLabels, cisdLabel)
+
+if showCisd and barstate.isconfirmed and bearishCisd and not bearishCisd[1]
+    label cisdLabel = label.new(bar_index, high, "CISD S", xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.red, 82), style = label.style_label_down, textcolor = color.red, size = size.tiny)
+    array.push(cisdLabels, cisdLabel)
+
+while array.size(cisdLabels) > maxCisdMarks
+    label.delete(array.shift(cisdLabels))
+
+// FVG detection with displacement filter
+atrValue = ta.atr(14)
+midBody = math.abs(close[1] - open[1])
+hasDisplacement = not na(atrValue[1]) and midBody >= atrValue[1] * fvgMinAtrMult
+
+bullFvgTop = low
+bullFvgBottom = high[2]
+bearFvgTop = low[2]
+bearFvgBottom = high
+newBullFvg = showFvg and bar_index >= 2 and bullFvgBottom < bullFvgTop and close[1] > open[1] and hasDisplacement
+newBearFvg = showFvg and bar_index >= 2 and bearFvgTop > bearFvgBottom and close[1] < open[1] and hasDisplacement
+
+if newBullFvg
+    color borderColor = color.new(color.lime, 35)
+    color fillColor = color.new(color.lime, 86)
+    box fvgBox = box.new(left = bar_index - 2, top = bullFvgTop, right = bar_index + extendBars, bottom = bullFvgBottom, border_color = borderColor, bgcolor = fillColor, xloc = xloc.bar_index)
+    line ce = na
+    if showCe
+        float cePrice = (bullFvgTop + bullFvgBottom) * 0.5
+        ce := line.new(bar_index - 2, cePrice, bar_index + extendBars, cePrice, xloc = xloc.bar_index, extend = extend.none, color = color.new(color.lime, 55), style = line.style_dotted, width = 1)
+    array.push(fvgZones, FvgZone.new(bar_index - 1, bullFvgTop, bullFvgBottom, true, false, fvgBox, ce))
+
+if newBearFvg
+    color borderColor = color.new(color.red, 35)
+    color fillColor = color.new(color.red, 86)
+    box fvgBox = box.new(left = bar_index - 2, top = bearFvgTop, right = bar_index + extendBars, bottom = bearFvgBottom, border_color = borderColor, bgcolor = fillColor, xloc = xloc.bar_index)
+    line ce = na
+    if showCe
+        float cePrice = (bearFvgTop + bearFvgBottom) * 0.5
+        ce := line.new(bar_index - 2, cePrice, bar_index + extendBars, cePrice, xloc = xloc.bar_index, extend = extend.none, color = color.new(color.red, 55), style = line.style_dotted, width = 1)
+    array.push(fvgZones, FvgZone.new(bar_index - 1, bearFvgTop, bearFvgBottom, false, false, fvgBox, ce))
+
+// OB creation from recent opposite candle when a displacement FVG appears.
+bearishObOffset = findBearishOffset(obSearchBars)
+bullishObOffset = findBullishOffset(obSearchBars)
+
+if showOb and newBullFvg
+    int obOffset = bearishObOffset
+    if not na(obOffset)
+        float obTop = high[obOffset]
+        float obBottom = low[obOffset]
+        int score = 2
+        score += inDiscount ? 2 : 0
+        score += close > rangeMid ? 1 : 0
+        score += obOffset <= 4 ? 1 : 0
+        if score >= minObScore
+            box obBox = box.new(left = bar_index - obOffset, top = obTop, right = bar_index + extendBars, bottom = obBottom, border_color = color.new(color.aqua, 35), bgcolor = color.new(color.aqua, 86), xloc = xloc.bar_index)
+            label obLabel = label.new(bar_index - obOffset, obBottom, "OB " + scoreText(score), xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.aqua, 84), style = label.style_label_up, textcolor = color.aqua, size = size.tiny)
+            array.push(obZones, ObZone.new(bar_index - obOffset, obTop, obBottom, true, false, score, obBox, obLabel))
+
+if showOb and newBearFvg
+    int obOffset = bullishObOffset
+    if not na(obOffset)
+        float obTop = high[obOffset]
+        float obBottom = low[obOffset]
+        int score = 2
+        score += inPremium ? 2 : 0
+        score += close < rangeMid ? 1 : 0
+        score += obOffset <= 4 ? 1 : 0
+        if score >= minObScore
+            box obBox = box.new(left = bar_index - obOffset, top = obTop, right = bar_index + extendBars, bottom = obBottom, border_color = color.new(color.orange, 35), bgcolor = color.new(color.orange, 86), xloc = xloc.bar_index)
+            label obLabel = label.new(bar_index - obOffset, obTop, "OB " + scoreText(score), xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.orange, 84), style = label.style_label_down, textcolor = color.orange, size = size.tiny)
+            array.push(obZones, ObZone.new(bar_index - obOffset, obTop, obBottom, false, false, score, obBox, obLabel))
+
+// FVG lifecycle and IFVG spawning.
+bool newBullIfvg = false
+bool newBearIfvg = false
+
+if array.size(fvgZones) > 0
+    for i = array.size(fvgZones) - 1 to 0
+        FvgZone f = array.get(fvgZones, i)
+        if not f.mitigated
+            box.set_right(f.bx, bar_index + extendBars)
+            if not na(f.ceLine)
+                line.set_x2(f.ceLine, bar_index + extendBars)
+
+            if f.isBullish and barstate.isconfirmed and close < f.bottom
+                f.mitigated := true
+                if not showMitigatedFvg
+                    deleteFvg(f)
+                else
+                    box.set_bgcolor(f.bx, color.new(color.gray, 92))
+                    box.set_border_color(f.bx, color.new(color.gray, 70))
+
+                if showIfvg
+                    box ifvgBox = box.new(left = bar_index, top = f.top, right = bar_index + extendBars, bottom = f.bottom, border_color = color.new(color.orange, 30), bgcolor = color.new(color.orange, 84), xloc = xloc.bar_index)
+                    label ifvgLabel = label.new(bar_index, f.top, "IFVG S", xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.orange, 84), style = label.style_label_down, textcolor = color.orange, size = size.tiny)
+                    array.push(ifvgZones, IfvgZone.new(bar_index, f.top, f.bottom, false, false, ifvgBox, ifvgLabel))
+                    newBearIfvg := true
+
+            else if not f.isBullish and barstate.isconfirmed and close > f.top
+                f.mitigated := true
+                if not showMitigatedFvg
+                    deleteFvg(f)
+                else
+                    box.set_bgcolor(f.bx, color.new(color.gray, 92))
+                    box.set_border_color(f.bx, color.new(color.gray, 70))
+
+                if showIfvg
+                    box ifvgBox = box.new(left = bar_index, top = f.top, right = bar_index + extendBars, bottom = f.bottom, border_color = color.new(color.yellow, 30), bgcolor = color.new(color.yellow, 84), xloc = xloc.bar_index)
+                    label ifvgLabel = label.new(bar_index, f.bottom, "IFVG B", xloc = xloc.bar_index, yloc = yloc.price, color = color.new(color.yellow, 84), style = label.style_label_up, textcolor = color.yellow, size = size.tiny)
+                    array.push(ifvgZones, IfvgZone.new(bar_index, f.top, f.bottom, true, false, ifvgBox, ifvgLabel))
+                    newBullIfvg := true
+
+        array.set(fvgZones, i, f)
+
+while array.size(fvgZones) > maxFvgCount
+    FvgZone oldest = array.shift(fvgZones)
+    deleteFvg(oldest)
+
+// IFVG lifecycle.
+if array.size(ifvgZones) > 0
+    for i = array.size(ifvgZones) - 1 to 0
+        IfvgZone z = array.get(ifvgZones, i)
+        if not z.mitigated
+            box.set_right(z.bx, bar_index + extendBars)
+            if z.isBullish and barstate.isconfirmed and close < z.bottom
+                z.mitigated := true
+                deleteIfvg(z)
+            else if not z.isBullish and barstate.isconfirmed and close > z.top
+                z.mitigated := true
+                deleteIfvg(z)
+        array.set(ifvgZones, i, z)
+
+while array.size(ifvgZones) > maxIfvgCount
+    IfvgZone oldest = array.shift(ifvgZones)
+    deleteIfvg(oldest)
+
+// OB lifecycle.
+if array.size(obZones) > 0
+    for i = array.size(obZones) - 1 to 0
+        ObZone z = array.get(obZones, i)
+        if not z.mitigated
+            box.set_right(z.bx, bar_index + extendBars)
+            if z.isBullish and barstate.isconfirmed and close < z.bottom
+                z.mitigated := true
+                deleteOb(z)
+            else if not z.isBullish and barstate.isconfirmed and close > z.top
+                z.mitigated := true
+                deleteOb(z)
+        array.set(obZones, i, z)
+
+while array.size(obZones) > maxObCount
+    ObZone oldest = array.shift(obZones)
+    deleteOb(oldest)
+
+// Active context counts.
+int activeBullFvg = 0
+int activeBearFvg = 0
+int activeBullIfvg = 0
+int activeBearIfvg = 0
+int bestBullObScore = 0
+int bestBearObScore = 0
+
+if array.size(fvgZones) > 0
+    for i = 0 to array.size(fvgZones) - 1
+        FvgZone f = array.get(fvgZones, i)
+        if not f.mitigated
+            if f.isBullish
+                activeBullFvg += 1
+            else
+                activeBearFvg += 1
+
+if array.size(ifvgZones) > 0
+    for i = 0 to array.size(ifvgZones) - 1
+        IfvgZone z = array.get(ifvgZones, i)
+        if not z.mitigated
+            if z.isBullish
+                activeBullIfvg += 1
+            else
+                activeBearIfvg += 1
+
+if array.size(obZones) > 0
+    for i = 0 to array.size(obZones) - 1
+        ObZone z = array.get(obZones, i)
+        if not z.mitigated
+            if z.isBullish
+                bestBullObScore := math.max(bestBullObScore, z.score)
+            else
+                bestBearObScore := math.max(bestBearObScore, z.score)
+
+bullSetupScore = (inDiscount ? 2 : 0) + (activeBullFvg > 0 ? 1 : 0) + (activeBullIfvg > 0 ? 2 : 0) + bestBullObScore
+bearSetupScore = (inPremium ? 2 : 0) + (activeBearFvg > 0 ? 1 : 0) + (activeBearIfvg > 0 ? 2 : 0) + bestBearObScore
+bullishSetup = bullSetupScore >= minSetupScore and bullSetupScore > bearSetupScore
+bearishSetup = bearSetupScore >= minSetupScore and bearSetupScore > bullSetupScore
+setupText = bullishSetup ? "BULLISH" : bearishSetup ? "BEARISH" : "NEUTRAL"
+setupColor = bullishSetup ? color.lime : bearishSetup ? color.red : color.gray
+
+alertReady = not confirmAlertsOnClose or barstate.isconfirmed
+alertBullSetup = alertReady and bullishSetup and not bullishSetup[1]
+alertBearSetup = alertReady and bearishSetup and not bearishSetup[1]
+
+plotshape(showSetupMarkers and alertBullSetup ? low : na, "Bullish ICT SMC Setup", shape.circle, location.belowbar, color.new(color.lime, 0), size = size.tiny)
+plotshape(showSetupMarkers and alertBearSetup ? high : na, "Bearish ICT SMC Setup", shape.circle, location.abovebar, color.new(color.red, 0), size = size.tiny)
+
+// Dashboard.
+if showDashboard and barstate.islast
+    var table dash = table.new(position = resolveDashboardPosition(dashboardPositionInput), columns = 2, rows = 8, bgcolor = color.new(color.black, 86), border_width = 1)
+
+    table.cell(dash, 0, 0, "AMT ICT SMC", text_color = color.white, text_size = size.small)
+    table.cell(dash, 1, 0, "v1", text_color = color.gray, text_size = size.small)
+
+    table.cell(dash, 0, 1, "Range Zone", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 1, zoneText, text_color = inPremium ? color.red : inDiscount ? color.lime : color.gray, text_size = size.small)
+
+    table.cell(dash, 0, 2, "Range", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 2, formatPrice(rangeHigh) + " / " + formatPrice(rangeLow), text_color = color.white, text_size = size.small)
+
+    table.cell(dash, 0, 3, "FVG", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 3, "B " + str.tostring(activeBullFvg) + " / S " + str.tostring(activeBearFvg), text_color = color.white, text_size = size.small)
+
+    table.cell(dash, 0, 4, "IFVG", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 4, "B " + str.tostring(activeBullIfvg) + " / S " + str.tostring(activeBearIfvg), text_color = activeBullIfvg + activeBearIfvg > 0 ? color.yellow : color.gray, text_size = size.small)
+
+    table.cell(dash, 0, 5, "OB Score", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 5, "B " + str.tostring(bestBullObScore) + " / S " + str.tostring(bestBearObScore), text_color = color.white, text_size = size.small)
+
+    table.cell(dash, 0, 6, "CISD", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 6, cisdText, text_color = bullishCisd ? color.lime : bearishCisd ? color.red : color.gray, text_size = size.small)
+
+    table.cell(dash, 0, 7, "Setup Bias", text_color = color.gray, text_size = size.small)
+    table.cell(dash, 1, 7, setupText + " " + str.tostring(math.max(bullSetupScore, bearSetupScore)), text_color = setupColor, text_size = size.small)
+
+// Update candle opens after using previous state for CISD.
+if close < open
+    lastBearishOpen := open
+if close > open
+    lastBullishOpen := open
+
+// Alerts: intentionally minimal and close-confirm gated by alertReady.
+alertcondition(alertBullSetup, title = "AMT ICT SMC v1 Bullish Setup", message = "AMT ICT SMC v1: bullish companion setup confirmed. Check dashboard context.")
+alertcondition(alertBearSetup, title = "AMT ICT SMC v1 Bearish Setup", message = "AMT ICT SMC v1: bearish companion setup confirmed. Check dashboard context.")
