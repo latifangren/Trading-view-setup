@@ -40,6 +40,20 @@ Companion session bias generasi baru yang tetap berdiri sendiri sebagai `indicat
 
 Pilih Session Bias v2 Companion kalau kamu sudah nyaman pakai toolkit modern v6.1, v6.2, v7.2, atau v7.3, lalu butuh panel session bias yang berdampingan tanpa ikut mengubah logic confluence toolkit. Kalau kamu cuma butuh versi ringan lama, v1 tetap ada dan tetap tidak berubah. Panduan cepatnya ada di [Panduan Pemula Crypto AMT Session Bias v2 Companion](docs/crypto-amt-session-bias-v2-companion-panduan-pemula.md).
 
+### `crypto_amt_ict_smc_companion_v1.pine`
+
+Companion ICT/SMC compact yang tetap berdiri sendiri sebagai `indicator(...)`, bukan `strategy(...)`, dan bukan bagian logic internal toolkit v6 atau v7.
+
+- membaca premium/discount dari range swing/fallback dan menampilkan equilibrium opsional
+- mendeteksi FVG tiga candle dengan filter displacement berbasis ATR dan CE midpoint opsional
+- menandai IFVG saat FVG aktif ditembus close-confirm ke sisi sebaliknya
+- membuat scored order block ringan dari opposite candle, displacement/FVG context, premium/discount alignment, close terhadap range mid, dan freshness
+- CISD hanya display-only, tidak mengubah sinyal toolkit utama
+- dashboard default ada di `Bottom Left` supaya tidak tabrakan dengan dashboard toolkit modern yang sering ada di kanan
+- alert sengaja dibatasi jadi dua jenis saja: `Bullish Setup` dan `Bearish Setup`, dengan close-confirm gate
+
+Pilih ICT SMC Companion v1 kalau kamu ingin konteks tambahan ala SMC seperti FVG, IFVG, premium/discount, scored OB, dan CISD, tapi tidak ingin mengubah toolkit utama v6.2 atau v7.3. File ini cocok dipasang berdampingan sebagai layer konteks, bukan pengganti confluence toolkit utama. Panduan cepatnya ada di [Panduan Pemula Crypto AMT ICT SMC Companion v1](docs/crypto-amt-ict-smc-companion-v1-panduan-pemula.md).
+
 ### `crypto_amt_toolkit_RECOMMENDED.pine`
 
 File paling aman untuk pemula yang ingin langsung mulai tanpa bingung pilih versi.
@@ -207,6 +221,7 @@ Jadi pakai script ini buat toolkit analisis, bukan buat ngejar kecocokan piksel 
 - pakai `crypto_amt_toolkit_RECOMMENDED.pine` kalau kamu pemula dan ingin mulai dari pilihan stabil tanpa mikir versi
 - pakai `crypto_amt_session_bias_v1.pine` kalau kamu ingin indikator khusus session sweep, reclaim, dan bias Asia/London/New York yang ringan
 - pakai `crypto_amt_session_bias_v2_companion.pine` kalau kamu ingin session bias standalone yang lebih pas dipasang di samping v6.1, v6.2, v7.2, atau v7.3, dengan dashboard default `Bottom Right`, detail `Compact`, dan pembaruan previous completed level yang hanya terjadi saat raw session end
+- pakai `crypto_amt_ict_smc_companion_v1.pine` kalau kamu ingin companion ICT/SMC compact untuk premium/discount, FVG + CE, IFVG, scored OB, dan CISD display-only tanpa mengganti logic toolkit utama
 - pakai `crypto_amt_toolkit_v7_3_auto_performance.pine` kalau kamu mau v7.2 clean/spec-watch dengan default auto-performance, dashboard position, Signal Grade, dan Volatility display-only
 - pakai `crypto_amt_toolkit_v7_2_spec_watch.pine` kalau kamu mau memantau kandidat realtime default-off sebelum candle close, tanpa menambah alert Spec Watch
 - pakai `crypto_amt_toolkit_v7_1_conservative_clean.pine` kalau kamu mau eksperimen conservative-risk dengan tampilan clean dan dashboard Focus/Full ala v7
@@ -233,15 +248,16 @@ Sebelum dipakai serius, cek manual langsung di TradingView Pine Editor:
 7. khusus Session Bias v2 Companion, cek bahwa script tetap masuk sebagai `indicator(...)`, bukan `strategy(...)`, lalu pastikan dashboard default muncul di `Bottom Right` dengan detail `Compact`
 8. khusus Session Bias v2 Companion, cek bahwa previous completed high/low tidak berubah saat sesi overlap hanya karena prioritas aktif pindah, lalu pastikan level baru hanya update setelah raw session end Asia, London, atau New York benar-benar selesai
 9. khusus Session Bias v2 Companion, cek empat alert saja yang tersedia, `Sweep High`, `Sweep Low`, `Reclaim After Sweep`, dan `Bias Flip`, lalu pastikan behavior close-confirm tetap menunggu candle close saat opsi confirm aktif
-10. khusus v4, cek juga status LTF, fallback, dan mode performanya
-11. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
-12. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
-13. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
-14. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
-15. khusus v6.2, cek `Performance mode = Auto` di 1H dan timeframe kecil; pastikan dashboard menampilkan resolved mode, `Signal Grade`, `Volatility`, dan posisi dashboard sesuai input
-16. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
-17. khusus v7.2, nyalakan `Enable Spec Watch (realtime only)` di market realtime, pastikan status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul sebelum candle close, lalu coba `Tint Spec Watch bars amber` tanpa mengganggu bar color normal saat tint off
-18. khusus v7.3, cek semua poin v7.2 plus `Performance mode = Auto`, dashboard position, `Signal Grade`, dan `Volatility`; pastikan info baru tidak membuat alert tambahan
-19. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
+10. khusus ICT SMC Companion v1, cek bahwa dashboard default muncul di `Bottom Left`, FVG/CE dan IFVG tampil sesuai toggle, scored OB tidak membuat order/backtest, CISD hanya display-only, dan alert TradingView cuma menyediakan dua setup close-confirm
+11. khusus v4, cek juga status LTF, fallback, dan mode performanya
+12. khusus v5, cek apakah Early Warning, Confirmed, Invalidated, active side, block reason, dan risk helper muncul masuk akal
+13. khusus v6, cek `PENDING LONG` / `PENDING SHORT` saat candle realtime belum close, lalu pastikan Confirmed dan Invalidated baru aktif setelah close saat close-confirm menyala
+14. khusus v7, cek `Dashboard detail` mode `Focus` dan `Full`, pastikan `FINAL` dan `WHY` muncul di atas detail lain pada mode `Focus`, lalu pastikan behavior `PENDING LONG` / `PENDING SHORT`, Confirmed, dan Invalidated tetap mengikuti close-confirm seperti v6
+15. khusus v6.1, cek `Risk mode` default `Structure`, lalu bandingkan `Hybrid` dan `Tight`; pastikan Scalp lebih ketat terhadap relative volume, low-relvol tetap tidak memblok dekat key level, dan `AWAY FROM LEVEL` hanya lolos saat impulse exception yang close-confirmed
+16. khusus v6.2, cek `Performance mode = Auto` di 1H dan timeframe kecil; pastikan dashboard menampilkan resolved mode, `Signal Grade`, `Volatility`, dan posisi dashboard sesuai input
+17. khusus v7.1, cek semua poin v6.1 plus `Dashboard detail` mode `Focus` / `Full`; pastikan tampilan default tetap bersih seperti v7
+18. khusus v7.2, nyalakan `Enable Spec Watch (realtime only)` di market realtime, pastikan status `SPEC WATCH LONG` / `SPEC WATCH SHORT` hanya muncul sebelum candle close, lalu coba `Tint Spec Watch bars amber` tanpa mengganggu bar color normal saat tint off
+19. khusus v7.3, cek semua poin v7.2 plus `Performance mode = Auto`, dashboard position, `Signal Grade`, dan `Volatility`; pastikan info baru tidak membuat alert tambahan
+20. aktifkan atau matikan Clean mode atau toggle visual lain kalau chart terlalu ramai, lalu pastikan dashboard dan level tag utama tetap terbaca
 
 Intinya, repo ini sekarang diposisikan sebagai toolkit indikator Pine untuk baca chart crypto, bukan mesin backtest otomatis.

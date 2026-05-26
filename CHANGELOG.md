@@ -4,6 +4,10 @@ Catatan perubahan penting untuk TradingView Pine Indicator Toolkit.
 
 ## Unreleased
 
+- Menambahkan `indicator/crypto_amt_ict_smc_companion_v1.pine` sebagai companion ICT/SMC standalone yang compact untuk dipasang berdampingan dengan toolkit utama.
+- Menambahkan premium/discount range, FVG + CE dengan filter ATR displacement, IFVG close-confirm, scored order block, CISD display-only, dashboard kecil default `Bottom Left`, dan dua alert setup close-confirm di ICT SMC Companion v1.
+- Menambahkan panduan pemula khusus `indicator/docs/crypto-amt-ict-smc-companion-v1-panduan-pemula.md` untuk menjelaskan cara baca companion ICT/SMC.
+- Menegaskan ICT SMC Companion v1 tidak mengubah logic v6.2/v7.3, tidak memakai `strategy(...)`, dan tidak menambah backtest/order behavior.
 - Menambahkan `indicator/crypto_amt_session_bias_v2_companion.pine` sebagai companion session bias standalone untuk dipasang berdampingan dengan toolkit modern v6.1, v6.2, v7.2, dan v7.3.
 - Menambahkan default dashboard `Bottom Right`, default detail `Compact`, dan empat alert close-confirm saja di Session Bias v2 Companion: `Sweep High`, `Sweep Low`, `Reclaim After Sweep`, dan `Bias Flip`.
 - Mengubah Session Bias v2 Companion supaya previous completed session high/low mengikuti raw session end asli, jadi level sebelumnya hanya update saat `asiaEnded`, `londonEnded`, atau `newYorkEnded`, bukan saat prioritas display aktif berpindah karena overlap.
